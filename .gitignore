@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.vite/
+.DS_Store
+*.log
+apps/web/dist/
+data/projects/*
+!data/projects/.gitkeep
+.env

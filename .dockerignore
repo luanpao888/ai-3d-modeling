@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+dist
+apps/web/dist
+.git
+.gitignore
+.DS_Store
+*.log
+coverage
+.vite
+data/projects/*
+!data/projects/.gitkeep

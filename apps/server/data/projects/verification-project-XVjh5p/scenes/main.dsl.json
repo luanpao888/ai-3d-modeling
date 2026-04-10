@@ -1,0 +1,173 @@
+{
+  "version": "1.0.0",
+  "units": "meter",
+  "upAxis": "Y",
+  "metadata": {
+    "sceneName": "Verification Project Scene",
+    "prompt": "在房间中央附近添加一把椅子和一张桌子。"
+  },
+  "nodes": [
+    {
+      "id": "ground-plane",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        -1.5708,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "material": {
+        "color": "#dbeafe",
+        "roughness": 1
+      },
+      "kind": "primitive",
+      "primitive": "plane",
+      "dimensions": {
+        "width": 12,
+        "height": 12
+      }
+    },
+    {
+      "id": "starter-block",
+      "position": [
+        0,
+        0.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "material": {
+        "color": "#2563eb",
+        "metalness": 0.1,
+        "roughness": 0.45
+      },
+      "kind": "primitive",
+      "primitive": "box",
+      "dimensions": {
+        "width": 1,
+        "height": 1,
+        "depth": 1
+      }
+    },
+    {
+      "id": "chair-mnsajm21",
+      "position": [
+        1.5,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "kind": "asset",
+      "assetId": "furniture:chair-basic"
+    },
+    {
+      "id": "table-mnsajm21",
+      "position": [
+        0,
+        0.75,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "material": {
+        "color": "#8b5cf6"
+      },
+      "kind": "primitive",
+      "primitive": "box",
+      "dimensions": {
+        "width": 1.6,
+        "height": 0.1,
+        "depth": 0.8
+      }
+    },
+    {
+      "id": "concept-mnsakq8i",
+      "position": [
+        0,
+        0.5,
+        -1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "material": {
+        "color": "#06b6d4"
+      },
+      "kind": "primitive",
+      "primitive": "box",
+      "dimensions": {
+        "width": 1,
+        "height": 1,
+        "depth": 1
+      }
+    },
+    {
+      "id": "concept-mnsb2c09",
+      "position": [
+        0,
+        0.5,
+        -1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "material": {
+        "color": "#06b6d4"
+      },
+      "kind": "primitive",
+      "primitive": "box",
+      "dimensions": {
+        "width": 1,
+        "height": 1,
+        "depth": 1
+      }
+    }
+  ]
+}

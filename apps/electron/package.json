@@ -1,0 +1,15 @@
+{
+  "name": "@ai3d/electron",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "dev": "wait-on tcp:3000 tcp:5173 && electron .",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^35.1.4",
+    "wait-on": "^8.0.3"
+  }
+}

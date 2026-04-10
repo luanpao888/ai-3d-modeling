@@ -1,0 +1,31 @@
+{
+  "name": "ai-3d-modeling",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "npm --workspace @ai3d/server run dev",
+    "start:server": "npm --workspace @ai3d/server run start",
+    "dev:web": "npm --workspace @ai3d/web run dev -- --host 0.0.0.0",
+    "dev:desktop": "concurrently -k -n server,web,electron \"npm run dev:server\" \"npm run dev:web\" \"npm --workspace @ai3d/electron run dev\"",
+    "build": "npm --workspace @ai3d/web run build",
+    "preview:web": "npm --workspace @ai3d/web run preview",
+    "docker:build:server": "dotenv -e .env -- sh -c 'docker build -f docker/server.Dockerfile -t \"$DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/ai-3d-modeling-server:${IMAGE_TAG:-latest}\" .'",
+    "docker:build:web": "dotenv -e .env -- sh -c 'docker build --build-arg VITE_API_URL=\"${VITE_API_URL:-http://localhost:3000}\" -f docker/web.Dockerfile -t \"$DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/ai-3d-modeling-web:${IMAGE_TAG:-latest}\" .'",
+    "docker:build:full": "dotenv -e .env -- sh -c 'docker build --build-arg VITE_API_URL=\"${VITE_API_URL:-http://localhost:3000}\" -f docker/full.Dockerfile -t \"$DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/ai-3d-modeling-full:${IMAGE_TAG:-latest}\" .'",
+    "docker:build": "npm run docker:build:server && npm run docker:build:web && npm run docker:build:full",
+    "docker:push:server": "dotenv -e .env -- sh -c 'docker push \"$DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/ai-3d-modeling-server:${IMAGE_TAG:-latest}\"'",
+    "docker:push:web": "dotenv -e .env -- sh -c 'docker push \"$DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/ai-3d-modeling-web:${IMAGE_TAG:-latest}\"'",
+    "docker:push:full": "dotenv -e .env -- sh -c 'docker push \"$DOCKER_REGISTRY/$DOCKERHUB_NAMESPACE/ai-3d-modeling-full:${IMAGE_TAG:-latest}\"'",
+    "docker:push": "npm run docker:push:server && npm run docker:push:web && npm run docker:push:full"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "dotenv-cli": "^7.4.2"
+  }
+}
