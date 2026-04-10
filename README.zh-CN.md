@@ -1,5 +1,9 @@
 # AI 3D 建模系统
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
 一个**AI 驱动的 3D 建模工作台**，希望通过自然语言对话的方式，把真实的产品创意持续转化为可迭代的 3D 结构方案。
 
 ---
@@ -212,7 +216,13 @@ my-project/
 
 ---
 
-## 📤 导出 / 导入
+## � 开源协议
+
+本项目采用 **MIT License**。
+
+---
+
+## �📤 导出 / 导入
 
 当前已实现：
 

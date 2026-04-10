@@ -1,5 +1,9 @@
 # AI 3D Modeling System
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
 An **AI-powered 3D modeling workspace** built to turn natural language conversations into structured 3D design iterations for real-world maker projects.
 
 ---
@@ -205,7 +209,13 @@ This keeps the UI code shared across browser and desktop shells.
 
 ---
 
-## 📤 Export / Import
+## � License
+
+This project is licensed under the **MIT License**.
+
+---
+
+## �📤 Export / Import
 
 Implemented now:
 
