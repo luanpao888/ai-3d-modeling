@@ -6,4 +6,4 @@ dist/
 apps/web/dist/
 data/projects/*
 !data/projects/.gitkeep
-.env
+.envpackage-lock.json
