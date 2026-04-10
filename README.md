@@ -1,6 +1,6 @@
 # AI 3D Modeling System
 
-A **local-first AI-powered 3D modeling workspace** built to turn natural language conversations into structured 3D design iterations for real-world maker projects.
+An **AI-powered 3D modeling workspace** built to turn natural language conversations into structured 3D design iterations for real-world maker projects.
 
 ---
 
