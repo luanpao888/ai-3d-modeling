@@ -9,3 +9,5 @@ data/projects/*
 .envpackage-lock.json
 package-lock.json
 .env
+
+/apps/server/data/
