@@ -209,13 +209,13 @@ This keeps the UI code shared across browser and desktop shells.
 
 ---
 
-## � License
+## License
 
 This project is licensed under the **MIT License**.
 
 ---
 
-## �📤 Export / Import
+## Export / Import
 
 Implemented now:
 
