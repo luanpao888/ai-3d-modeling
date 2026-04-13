@@ -1,6 +1,3 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-
 import { nanoid } from 'nanoid';
 
 import {
@@ -12,38 +9,37 @@ import {
 } from '@ai3d/shared';
 
 export class ProjectService {
-  constructor({ projectsRoot } = {}) {
-    this.projectsRoot = path.resolve(process.cwd(), projectsRoot ?? 'data/projects');
+  constructor({ databaseService } = {}) {
+    this.databaseService = databaseService;
   }
 
-  async initialize() {
-    await fs.mkdir(this.projectsRoot, { recursive: true });
-  }
+  async initialize() {}
 
   async listProjects() {
-    const entries = await fs.readdir(this.projectsRoot, { withFileTypes: true });
-    const projects = [];
+    const { rows } = await this.databaseService.query(
+      `
+        SELECT
+          p.id,
+          p.name,
+          p.description,
+          p.units,
+          p.up_axis,
+          p.main_scene,
+          p.created_at,
+          p.updated_at,
+          p.current_version_id,
+          v.version_number AS current_version_number,
+          v.created_at AS current_version_created_at
+        FROM projects p
+        LEFT JOIN project_dsl_versions v ON v.id = p.current_version_id
+        ORDER BY p.updated_at DESC
+      `
+    );
 
-    for (const entry of entries) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-
-      try {
-        const project = await this.getProject(entry.name);
-        projects.push({
-          id: project.id,
-          name: project.name,
-          description: project.description,
-          createdAt: project.createdAt,
-          updatedAt: project.updatedAt
-        });
-      } catch {
-        // Ignore malformed project folders so the service remains resilient.
-      }
-    }
-
-    return projects.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    return rows.map((row) => ({
+      ...toProjectManifest(row),
+      currentVersion: toVersionSummary(row)
+    }));
   }
 
   async createProject({ name, description = '' }) {
@@ -51,85 +47,390 @@ export class ProjectService {
       throw new Error('Project name is required');
     }
 
-    const baseId = slugifyName(name) || 'project';
+    const normalizedName = name.trim();
+    const baseId = slugifyName(normalizedName) || 'project';
     const projectId = `${baseId}-${nanoid(6)}`;
-    const projectPath = this.resolveProjectPath(projectId);
-    const createdAt = new Date().toISOString();
+    const dsl = createDefaultDsl(`${normalizedName} Scene`);
+    const versionId = nanoid(12);
 
-    await fs.mkdir(path.join(projectPath, 'scenes'), { recursive: true });
-    await fs.mkdir(path.join(projectPath, 'assets'), { recursive: true });
-    await fs.mkdir(path.join(projectPath, 'exports'), { recursive: true });
-    await fs.mkdir(path.join(projectPath, 'meta'), { recursive: true });
+    await this.databaseService.withTransaction(async (client) => {
+      await client.query(
+        `
+          INSERT INTO projects (id, slug, name, description, units, up_axis, main_scene)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `,
+        [
+          projectId,
+          baseId,
+          normalizedName,
+          description,
+          dsl.units,
+          dsl.upAxis,
+          'db://dsl/current'
+        ]
+      );
 
-    const manifest = projectManifestSchema.parse({
-      id: projectId,
-      name: name.trim(),
-      description,
-      createdAt,
-      updatedAt: createdAt,
-      mainScene: 'scenes/main.dsl.json'
+      await client.query(
+        `
+          INSERT INTO project_dsl_versions (
+            id,
+            project_id,
+            version_number,
+            dsl,
+            source,
+            prompt,
+            parent_version_id
+          )
+          VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
+        `,
+        [versionId, projectId, 1, JSON.stringify(dsl), 'seed', dsl.metadata?.prompt ?? null, null]
+      );
+
+      await client.query(
+        `
+          UPDATE projects
+          SET current_version_id = $2
+          WHERE id = $1
+        `,
+        [projectId, versionId]
+      );
     });
-
-    const dsl = createDefaultDsl(`${name.trim()} Scene`);
-
-    await writeJson(path.join(projectPath, 'project.json'), manifest);
-    await writeJson(path.join(projectPath, manifest.mainScene), dsl);
 
     return this.getProject(projectId);
   }
 
   async getProject(projectId) {
-    const projectPath = this.resolveProjectPath(projectId);
-    const manifestPath = path.join(projectPath, 'project.json');
-    const manifest = projectManifestSchema.parse(await readJson(manifestPath));
-    const dsl = normalizeDsl(await readJson(path.join(projectPath, manifest.mainScene)));
+    const row = await this.loadCurrentProjectRow(projectId);
 
     return {
-      ...manifest,
-      dsl
+      ...toProjectManifest(row),
+      dsl: normalizeDsl(row.current_dsl ?? {}),
+      currentVersion: toVersionDetails(row)
     };
   }
 
-  async saveDsl(projectId, dslInput) {
-    const project = await this.getProject(projectId);
-    const projectPath = this.resolveProjectPath(projectId);
+  async saveDsl(projectId, dslInput, options = {}) {
     const dsl = normalizeDsl(dslInput);
-    const updatedManifest = projectManifestSchema.parse({
-      ...project,
-      updatedAt: new Date().toISOString()
-    });
 
-    await writeJson(path.join(projectPath, project.mainScene), dsl);
-    await writeJson(path.join(projectPath, 'project.json'), updatedManifest);
+    await this.databaseService.withTransaction(async (client) => {
+      const project = await this.lockProjectVersionState(client, projectId);
+      const nextVersionNumber = project.current_version_number + 1;
+      const versionId = nanoid(12);
+
+      await client.query(
+        `
+          INSERT INTO project_dsl_versions (
+            id,
+            project_id,
+            version_number,
+            dsl,
+            source,
+            prompt,
+            parent_version_id
+          )
+          VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
+        `,
+        [
+          versionId,
+          projectId,
+          nextVersionNumber,
+          JSON.stringify(dsl),
+          options.source ?? 'replace',
+          dsl.metadata?.prompt ?? null,
+          project.current_version_id
+        ]
+      );
+
+      await client.query(
+        `
+          UPDATE projects
+          SET
+            units = $2,
+            up_axis = $3,
+            current_version_id = $4,
+            updated_at = NOW()
+          WHERE id = $1
+        `,
+        [projectId, dsl.units, dsl.upAxis, versionId]
+      );
+    });
 
     return this.getProject(projectId);
   }
 
   async patchDsl(projectId, operations) {
-    const project = await this.getProject(projectId);
-    const nextDsl = applyDslPatch(project.dsl, operations ?? []);
-    return this.saveDsl(projectId, nextDsl);
+    await this.databaseService.withTransaction(async (client) => {
+      const project = await this.lockProjectVersionState(client, projectId);
+      const patchedDsl = applyDslPatch(project.current_dsl, operations ?? []);
+      const nextVersionNumber = project.current_version_number + 1;
+      const versionId = nanoid(12);
+
+      await client.query(
+        `
+          INSERT INTO project_dsl_versions (
+            id,
+            project_id,
+            version_number,
+            dsl,
+            source,
+            prompt,
+            parent_version_id
+          )
+          VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
+        `,
+        [
+          versionId,
+          projectId,
+          nextVersionNumber,
+          JSON.stringify(patchedDsl),
+          'patch',
+          patchedDsl.metadata?.prompt ?? null,
+          project.current_version_id
+        ]
+      );
+
+      await client.query(
+        `
+          UPDATE projects
+          SET
+            units = $2,
+            up_axis = $3,
+            current_version_id = $4,
+            updated_at = NOW()
+          WHERE id = $1
+        `,
+        [projectId, patchedDsl.units, patchedDsl.upAxis, versionId]
+      );
+
+      return patchedDsl;
+    });
+
+    return this.getProject(projectId);
   }
 
-  resolveProjectPath(projectId) {
-    const safeId = this.ensureSafeProjectId(projectId);
-    return path.join(this.projectsRoot, safeId);
+  async listDslVersions(projectId) {
+    await this.assertProjectExists(projectId);
+
+    const { rows } = await this.databaseService.query(
+      `
+        SELECT id, version_number, source, prompt, parent_version_id, created_at
+        FROM project_dsl_versions
+        WHERE project_id = $1
+        ORDER BY version_number DESC
+      `,
+      [projectId]
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      versionNumber: row.version_number,
+      source: row.source,
+      prompt: row.prompt,
+      parentVersionId: row.parent_version_id,
+      createdAt: toIsoString(row.created_at)
+    }));
   }
 
-  ensureSafeProjectId(projectId) {
-    if (!/^[a-zA-Z0-9_-]+$/.test(projectId)) {
-      throw new Error('Invalid project id');
+  async getDslVersion(projectId, versionId) {
+    const { rows } = await this.databaseService.query(
+      `
+        SELECT
+          p.id,
+          p.name,
+          p.description,
+          p.units,
+          p.up_axis,
+          p.main_scene,
+          p.created_at,
+          p.updated_at,
+          p.current_version_id,
+          v.id AS version_id,
+          v.version_number,
+          v.dsl,
+          v.source,
+          v.prompt,
+          v.parent_version_id,
+          v.created_at AS version_created_at
+        FROM projects p
+        JOIN project_dsl_versions v ON v.project_id = p.id
+        WHERE p.id = $1 AND v.id = $2
+      `,
+      [projectId, versionId]
+    );
+
+    const row = rows[0];
+    if (!row) {
+      throw notFound(`DSL version not found: ${versionId}`);
     }
 
-    return projectId;
+    return {
+      ...toProjectManifest(row),
+      dsl: normalizeDsl(row.dsl),
+      version: {
+        id: row.version_id,
+        versionNumber: row.version_number,
+        source: row.source,
+        prompt: row.prompt,
+        parentVersionId: row.parent_version_id,
+        createdAt: toIsoString(row.version_created_at),
+        isCurrent: row.version_id === row.current_version_id
+      }
+    };
+  }
+
+  async getExportBundle(projectId) {
+    const project = await this.getProject(projectId);
+    const { rows } = await this.databaseService.query(
+      `
+        SELECT id, version_number, dsl, source, prompt, parent_version_id, created_at
+        FROM project_dsl_versions
+        WHERE project_id = $1
+        ORDER BY version_number ASC
+      `,
+      [projectId]
+    );
+
+    return {
+      manifest: {
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        units: project.units,
+        upAxis: project.upAxis,
+        mainScene: project.mainScene,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+        currentVersion: project.currentVersion
+      },
+      currentDsl: project.dsl,
+      versions: rows.map((row) => ({
+        id: row.id,
+        versionNumber: row.version_number,
+        source: row.source,
+        prompt: row.prompt,
+        parentVersionId: row.parent_version_id,
+        createdAt: toIsoString(row.created_at),
+        dsl: normalizeDsl(row.dsl)
+      }))
+    };
+  }
+
+  async assertProjectExists(projectId) {
+    const { rowCount } = await this.databaseService.query('SELECT 1 FROM projects WHERE id = $1', [projectId]);
+    if (rowCount === 0) {
+      throw notFound(`Project not found: ${projectId}`);
+    }
+  }
+
+  async loadCurrentProjectRow(projectId) {
+    const { rows } = await this.databaseService.query(
+      `
+        SELECT
+          p.id,
+          p.name,
+          p.description,
+          p.units,
+          p.up_axis,
+          p.main_scene,
+          p.created_at,
+          p.updated_at,
+          p.current_version_id,
+          v.version_number AS current_version_number,
+          v.source AS current_version_source,
+          v.prompt AS current_version_prompt,
+          v.parent_version_id AS current_version_parent_id,
+          v.created_at AS current_version_created_at,
+          v.dsl AS current_dsl
+        FROM projects p
+        LEFT JOIN project_dsl_versions v ON v.id = p.current_version_id
+        WHERE p.id = $1
+      `,
+      [projectId]
+    );
+
+    const row = rows[0];
+    if (!row) {
+      throw notFound(`Project not found: ${projectId}`);
+    }
+
+    return row;
+  }
+
+  async lockProjectVersionState(client, projectId) {
+    const { rows } = await client.query(
+      `
+        SELECT
+          p.id,
+          p.current_version_id,
+          COALESCE(v.version_number, 0) AS current_version_number,
+          COALESCE(v.dsl, $2::jsonb) AS current_dsl
+        FROM projects p
+        LEFT JOIN project_dsl_versions v ON v.id = p.current_version_id
+        WHERE p.id = $1
+        FOR UPDATE OF p
+      `,
+      [projectId, JSON.stringify(createDefaultDsl('Starter Scene'))]
+    );
+
+    const row = rows[0];
+    if (!row) {
+      throw notFound(`Project not found: ${projectId}`);
+    }
+
+    return {
+      current_version_id: row.current_version_id,
+      current_version_number: Number(row.current_version_number ?? 0),
+      current_dsl: normalizeDsl(row.current_dsl)
+    };
   }
 }
 
-async function readJson(filePath) {
-  const content = await fs.readFile(filePath, 'utf8');
-  return JSON.parse(content);
+function toProjectManifest(row) {
+  return projectManifestSchema.parse({
+    id: row.id,
+    name: row.name,
+    description: row.description ?? '',
+    units: row.units,
+    upAxis: row.up_axis,
+    mainScene: row.main_scene,
+    createdAt: toIsoString(row.created_at),
+    updatedAt: toIsoString(row.updated_at)
+  });
 }
 
-async function writeJson(filePath, value) {
-  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+function toVersionSummary(row) {
+  if (!row.current_version_id) {
+    return null;
+  }
+
+  return {
+    id: row.current_version_id,
+    versionNumber: row.current_version_number,
+    createdAt: toIsoString(row.current_version_created_at)
+  };
+}
+
+function toVersionDetails(row) {
+  if (!row.current_version_id) {
+    return null;
+  }
+
+  return {
+    id: row.current_version_id,
+    versionNumber: row.current_version_number,
+    source: row.current_version_source,
+    prompt: row.current_version_prompt,
+    parentVersionId: row.current_version_parent_id,
+    createdAt: toIsoString(row.current_version_created_at)
+  };
+}
+
+function toIsoString(value) {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function notFound(message) {
+  const error = new Error(message);
+  error.statusCode = 404;
+  return error;
 }

@@ -1,17 +1,14 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import archiver from 'archiver';
 
 export class ExportService {
-  constructor({ projectsRoot }) {
-    this.projectsRoot = projectsRoot;
+  constructor({ projectService }) {
+    this.projectService = projectService;
   }
 
   async exportProjectAsZip(projectId) {
-    const projectPath = this.resolveProjectPath(projectId);
-    await fs.access(projectPath);
+    const bundle = await this.projectService.getExportBundle(projectId);
 
     return new Promise((resolve, reject) => {
       const archive = archiver('zip', {
@@ -26,16 +23,31 @@ export class ExportService {
       archive.on('error', reject);
 
       archive.pipe(stream);
-      archive.directory(projectPath, projectId);
+
+      archive.append(`${JSON.stringify(bundle.manifest, null, 2)}\n`, {
+        name: `${projectId}/project.json`
+      });
+      archive.append(`${JSON.stringify(bundle.currentDsl, null, 2)}\n`, {
+        name: `${projectId}/scenes/current.dsl.json`
+      });
+      archive.append(
+        `${JSON.stringify(
+          bundle.versions.map(({ dsl, ...version }) => version),
+          null,
+          2
+        )}\n`,
+        {
+          name: `${projectId}/versions/index.json`
+        }
+      );
+
+      for (const version of bundle.versions) {
+        archive.append(`${JSON.stringify(version.dsl, null, 2)}\n`, {
+          name: `${projectId}/versions/v${String(version.versionNumber).padStart(4, '0')}-${version.id}.dsl.json`
+        });
+      }
+
       archive.finalize();
     });
-  }
-
-  resolveProjectPath(projectId) {
-    if (!/^[a-zA-Z0-9_-]+$/.test(projectId)) {
-      throw new Error('Invalid project id');
-    }
-
-    return path.join(this.projectsRoot, projectId);
   }
 }

@@ -5,7 +5,12 @@ x-shared-env:
   HOST: &host ${HOST:-0.0.0.0}
   PORT: &port ${PORT:-3000}
   WEB_PORT: &web_port ${WEB_PORT:-4173}
-  PROJECTS_ROOT: &projects_root ${PROJECTS_ROOT:-./data/projects}
+  DATABASE_PORT: &database_port ${DATABASE_PORT:-5432}
+  DATABASE_URL_DOCKER: &database_url_docker ${DATABASE_URL_DOCKER:-postgresql://postgres:postgres@db:5432/ai_3d_modeling}
+  DATABASE_SSL: &database_ssl ${DATABASE_SSL:-false}
+  POSTGRES_DB: &postgres_db ${POSTGRES_DB:-ai_3d_modeling}
+  POSTGRES_USER: &postgres_user ${POSTGRES_USER:-postgres}
+  POSTGRES_PASSWORD: &postgres_password ${POSTGRES_PASSWORD:-postgres}
   ASSET_REGISTRY_PATH: &asset_registry_path ${ASSET_REGISTRY_PATH:-./apps/server/data/asset-registry.json}
   AI_PROVIDER: &ai_provider ${AI_PROVIDER:-mock}
   AI_MODEL: &ai_model ${AI_MODEL:-gpt-4o-mini}
@@ -14,13 +19,34 @@ x-shared-env:
   VITE_API_URL: &vite_api_url ${VITE_API_URL:-http://localhost:3000}
 
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: *postgres_db
+      POSTGRES_USER: *postgres_user
+      POSTGRES_PASSWORD: *postgres_password
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "${DATABASE_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   server:
     image: ${DOCKER_REGISTRY}/${DOCKERHUB_NAMESPACE}/ai-3d-modeling-server:${IMAGE_TAG:-latest}
     pull_policy: always
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       HOST: *host
       PORT: *port
-      PROJECTS_ROOT: /app/data/projects
+      DATABASE_URL: *database_url_docker
+      DATABASE_SSL: *database_ssl
       ASSET_REGISTRY_PATH: /app/apps/server/data/asset-registry.json
       AI_PROVIDER: *ai_provider
       AI_MODEL: *ai_model
@@ -28,8 +54,6 @@ services:
       OPENAI_BASE_URL: *openai_base_url
     ports:
       - "${PORT:-3000}:3000"
-    volumes:
-      - project_data:/app/data/projects
     restart: unless-stopped
 
   web:
@@ -45,4 +69,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  project_data:
+  postgres_data:
