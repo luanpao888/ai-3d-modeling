@@ -1,4 +1,5 @@
 import { Button, Input, Modal, Space, Tabs, Tag } from 'antd';
+import Editor from '@monaco-editor/react';
 import JsonView from 'react18-json-view';
 
 export function StudioDslModal({
@@ -52,12 +53,33 @@ export function StudioDslModal({
             children: (
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
                 {dslDraftError ? <Tag color="error">{dslDraftError}</Tag> : <Tag color="success">{t('labels.jsonValid')}</Tag>}
-                <Input.TextArea
-                  value={dslDraft}
-                  onChange={(event) => onDraftChange(event.target.value)}
-                  autoSize={{ minRows: 20, maxRows: 28 }}
-                  className="studio-dsl-editor"
-                />
+                <div style={{ 
+                  border: '1px solid #d9d9d9', 
+                  borderRadius: '6px',
+                  overflow: 'hidden',
+                  height: '520px'
+                }}>
+                  <Editor
+                    height="100%"
+                    language="json"
+                    theme="light"
+                    value={dslDraft}
+                    onChange={(value) => onDraftChange(value || '')}
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 13,
+                      fontFamily: '"GeistMono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", monospace',
+                      lineNumbers: 'on',
+                      scrollBeyondLastLine: false,
+                      padding: { top: 12, bottom: 12 },
+                      wordWrap: 'on',
+                      formatOnPaste: true,
+                      formatOnType: true,
+                      automaticLayout: true,
+                      bracketPairColorization: { enabled: true }
+                    }}
+                  />
+                </div>
               </Space>
             )
           }

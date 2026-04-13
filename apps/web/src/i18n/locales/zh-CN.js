@@ -43,6 +43,7 @@ export default {
     generateDsl: '发送给 Agent',
     saveDsl: '保存 DSL',
     editDsl: '编辑 DSL',
+    export: '导出',
     exportZip: '导出 ZIP',
     exportGlb: '导出 GLB',
     reconnect: '重连事件流',

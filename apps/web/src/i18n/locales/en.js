@@ -43,6 +43,7 @@ export default {
     generateDsl: 'Send to agent',
     saveDsl: 'Save DSL',
     editDsl: 'Edit DSL',
+    export: 'Export',
     exportZip: 'Export ZIP',
     exportGlb: 'Export GLB',
     reconnect: 'Reconnect stream',

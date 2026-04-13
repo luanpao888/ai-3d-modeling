@@ -1,5 +1,5 @@
 import { ArrowsAltOutlined, CodeOutlined, ExportOutlined } from '@ant-design/icons';
-import { Button, Card, Flex, Space, Typography } from 'antd';
+import { Button, Card, Dropdown, Flex, Space, Typography } from 'antd';
 
 const { Text } = Typography;
 
@@ -14,6 +14,19 @@ export function StudioPreviewPanel({
   onDownloadZip,
   onExportGlb
 }) {
+  const exportMenuItems = [
+    {
+      key: 'zip',
+      label: t('actions.exportZip'),
+      onClick: onDownloadZip
+    },
+    {
+      key: 'glb',
+      label: t('actions.exportGlb'),
+      onClick: onExportGlb
+    }
+  ];
+
   return (
     <Card className="studio-card studio-preview-card" bordered={false}>
       <Flex justify="space-between" align="center" className="studio-preview-meta">
@@ -30,12 +43,11 @@ export function StudioPreviewPanel({
           <Button icon={<ArrowsAltOutlined />} onClick={onToggleFullscreen}>
             {isFullscreen ? t('actions.exitFullscreen') : t('actions.fullscreen')}
           </Button>
-          <Button icon={<ExportOutlined />} onClick={onDownloadZip} disabled={!activeProject}>
-            {t('actions.exportZip')}
-          </Button>
-          <Button icon={<ExportOutlined />} onClick={onExportGlb} disabled={!activeProject}>
-            {t('actions.exportGlb')}
-          </Button>
+          <Dropdown menu={{ items: exportMenuItems }} trigger={['click']} disabled={!activeProject}>
+            <Button icon={<ExportOutlined />} disabled={!activeProject}>
+              {t('actions.export')}
+            </Button>
+          </Dropdown>
         </Space>
       </Flex>
 
