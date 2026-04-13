@@ -1,4 +1,4 @@
-import { Button, Card, Flex, Segmented, Select, Space, Tag, Typography } from 'antd';
+import { Button, Card, Flex, Segmented, Select, Space, Tag, Tooltip, Typography } from 'antd';
 
 const { Text, Title } = Typography;
 
@@ -12,8 +12,7 @@ export function StudioToolbar({
   sessionMode,
   setSessionMode,
   transportMode,
-  session,
-  onCreateSession
+  session
 }) {
   return (
     <Card className="studio-card studio-toolbar" bordered={false}>
@@ -36,12 +35,21 @@ export function StudioToolbar({
           <Segmented
             value={sessionMode}
             onChange={setSessionMode}
-            options={['navigator', 'autopilot'].map((mode) => ({ value: mode, label: t(`modes.${mode}`) }))}
+            options={['navigator', 'autopilot'].map((mode) => {
+              const descKey = mode === 'navigator' ? 'navigatorDesc' : 'autopilotDesc';
+              return {
+                value: mode,
+                label: (
+                  <Tooltip title={t(`modes.${descKey}`)}>
+                    {t(`modes.${mode}`)}
+                  </Tooltip>
+                )
+              };
+            })}
           />
-          <Tag className="studio-pill-tag">{transportMode}</Tag>
+          {/* <Tag className="studio-pill-tag">{transportMode}</Tag> */}
           <Tag className="studio-pill-tag">{t('toolbar.unitsValue')}</Tag>
           {session ? <Tag className="studio-pill-tag">session {session.id}</Tag> : null}
-          <Button onClick={onCreateSession}>{t('actions.createSession')}</Button>
         </Space>
       </Flex>
     </Card>

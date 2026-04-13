@@ -85,6 +85,8 @@ export default {
   },
   modes: {
     navigator: '导航模式',
-    autopilot: '自动驾驶'
+    navigatorDesc: '手动模式，你指导每一步并审阅 Agent 输出。',
+    autopilot: '自动驾驶',
+    autopilotDesc: '让 Agent 自主运行，最小化人工干预。'
   }
 };

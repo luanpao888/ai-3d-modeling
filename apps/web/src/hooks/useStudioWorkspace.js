@@ -388,7 +388,6 @@ export function useStudioWorkspace() {
     previewShellRef,
     handleCreateProject,
     handleOpenProject,
-    handleCreateSession,
     handleGenerateDsl,
     handleResolveQuestion,
     handleDownloadZip,

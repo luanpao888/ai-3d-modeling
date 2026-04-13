@@ -85,6 +85,8 @@ export default {
   },
   modes: {
     navigator: 'Navigator',
-    autopilot: 'Autopilot'
+    navigatorDesc: 'Manual mode where you guide each step and review agent outputs.',
+    autopilot: 'Autopilot',
+    autopilotDesc: 'Let the agent run autonomously with minimal intervention.'
   }
 };

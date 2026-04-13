@@ -52,7 +52,6 @@ export default function App() {
             setSessionMode={workspace.setSessionMode}
             transportMode={workspace.transportMode}
             session={workspace.session}
-            onCreateSession={workspace.handleCreateSession}
           />
 
           {workspace.error ? (
