@@ -74,8 +74,21 @@ export function createHttpClient(baseUrl = DEFAULT_BASE_URL) {
     getSession(projectId, sessionId) {
       return request(`/projects/${projectId}/ai/sessions/${sessionId}`);
     },
-    listSessionHistory(projectId, sessionId) {
-      return request(`/projects/${projectId}/ai/sessions/${sessionId}/history`);
+    listSessionHistory(projectId, sessionId, options = {}) {
+      const params = new URLSearchParams();
+      if (Number.isFinite(options.limit) && options.limit > 0) {
+        params.set('limit', String(options.limit));
+      }
+      if (Number.isFinite(options.offset) && options.offset >= 0) {
+        params.set('offset', String(options.offset));
+      }
+
+      const query = params.toString();
+      const path = query
+        ? `/projects/${projectId}/ai/sessions/${sessionId}/history?${query}`
+        : `/projects/${projectId}/ai/sessions/${sessionId}/history`;
+
+      return request(path);
     },
     sendSessionMessage(projectId, sessionId, message) {
       return request(`/projects/${projectId}/ai/sessions/${sessionId}/messages`, {

@@ -33,6 +33,8 @@ export default {
     resolved: '已处理',
     noMessages: '暂无消息。开始向 Agent 发送消息吧。',
     loadingMore: '加载更多历史...',
+    pullToLoadPrevious: '上拉加载更早的消息',
+    noMoreMessagesTop: '没有更多消息了',
     ctrlEnter: '回车发送，Shift+Enter 换行',
     dslViewer: '查看',
     dslEditor: '编辑',

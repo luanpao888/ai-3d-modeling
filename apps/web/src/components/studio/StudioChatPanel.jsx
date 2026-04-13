@@ -1,22 +1,28 @@
-import { AppstoreOutlined, RobotOutlined, SendOutlined, UserOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
 import { Bubble, Sender } from '@ant-design/x';
 import { Button, Card, Empty, Flex, Space, Tag, Typography } from 'antd';
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 const { Text, Title } = Typography;
 
 export function StudioChatPanel({
   t,
   session,
-  sessionMode,
   prompt,
   setPrompt,
+  senderResetKey,
   isRunning,
   history,
+  hasMoreHistory,
+  isLoadingOlderHistory,
   events,
   onSend,
-  onResolveQuestion
+  onResolveQuestion,
+  onLoadOlderHistory
 }) {
+  const [isAtTop, setIsAtTop] = useState(false);
+  const timelineScrollRef = useRef(null);
+
   const mergedTimelineItems = useMemo(() => {
     const records = [];
 
@@ -114,20 +120,56 @@ export function StudioChatPanel({
     []
   );
 
+  const canLoadMore = Boolean(hasMoreHistory);
+
+  function handleTimelineScroll(event) {
+    setIsAtTop(event.currentTarget.scrollTop <= 24);
+
+    if (!canLoadMore) {
+      return;
+    }
+
+    if (event.currentTarget.scrollTop <= 24) {
+      onLoadOlderHistory();
+    }
+  }
+
+  function handleTimelineWheel(event) {
+    if (!canLoadMore || event.deltaY >= 0) {
+      return;
+    }
+
+    const container = timelineScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const isAtTop = container.scrollTop <= 24;
+    const hasNoOverflow = container.scrollHeight <= container.clientHeight;
+    if (isAtTop || hasNoOverflow) {
+      setIsAtTop(true);
+      onLoadOlderHistory();
+    }
+  }
+
   return (
     <Card className="studio-card studio-chat-card" bordered={false}>
       <Flex justify="space-between" align="center" className="studio-chat-head">
         <div>
           <Text className="studio-eyebrow">{t('labels.chatTitle')}</Text>
           <Title level={4} className="studio-chat-title">
-            {session ? t(`modes.${session.mode}`) : t('actions.createSession')}
+            {session ? t('labels.sessionHistory') : t('actions.createSession')}
           </Title>
         </div>
         <Tag className="studio-pill-tag">{mergedTimelineItems.length}</Tag>
       </Flex>
 
       {mergedTimelineItems.length ? (
-        <Bubble.List className="studio-bubble-list" items={mergedTimelineItems} role={roleConfig} autoScroll />
+        <div className="studio-chat-scroll" ref={timelineScrollRef} onScroll={handleTimelineScroll} onWheel={handleTimelineWheel}>
+          {canLoadMore ? <Text type="secondary" className="studio-chat-load-more">{isLoadingOlderHistory ? t('labels.loadingMore') : t('labels.pullToLoadPrevious')}</Text> : null}
+          {!canLoadMore && isAtTop ? <Text type="secondary" className="studio-chat-load-more">{t('labels.noMoreMessagesTop')}</Text> : null}
+          <Bubble.List className="studio-bubble-list" items={mergedTimelineItems} role={roleConfig} />
+        </div>
       ) : (
         <div className="studio-empty-chat">
           <Empty description={t('labels.noMessages')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -136,21 +178,15 @@ export function StudioChatPanel({
 
       <div className="studio-sender-wrap">
         <Sender
-          value={prompt}
+          key={senderResetKey}
           loading={isRunning}
           submitType="enter"
           onChange={setPrompt}
-          onSubmit={onSend}
+          onSubmit={(value) => onSend(value)}
           placeholder={t('labels.aiPrompt')}
           autoSize={{ minRows: 3, maxRows: 6 }}
-          prefix={<Tag className="studio-pill-tag studio-mode-tag">{t(`modes.${sessionMode}`)}</Tag>}
           footer={
-            <Flex justify="space-between" align="center" className="studio-sender-footer">
-              <Text type="secondary">{t('labels.ctrlEnter')}</Text>
-              <Button type="primary" icon={<SendOutlined />} onClick={onSend} loading={isRunning}>
-                {t('actions.sendMessage')}
-              </Button>
-            </Flex>
+            <Text type="secondary">{t('labels.ctrlEnter')}</Text>
           }
         />
       </div>

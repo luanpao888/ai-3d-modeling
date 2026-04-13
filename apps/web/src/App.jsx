@@ -76,14 +76,17 @@ export default function App() {
             <StudioChatPanel
               t={workspace.t}
               session={workspace.session}
-              sessionMode={workspace.sessionMode}
               prompt={workspace.prompt}
               setPrompt={workspace.setPrompt}
+              senderResetKey={workspace.senderResetKey}
               isRunning={workspace.isRunning}
               history={workspace.history}
+              hasMoreHistory={workspace.hasMoreHistory}
+              isLoadingOlderHistory={workspace.isLoadingOlderHistory}
               events={workspace.events}
               onSend={workspace.handleGenerateDsl}
               onResolveQuestion={workspace.handleResolveQuestion}
+              onLoadOlderHistory={workspace.handleLoadOlderHistory}
             />
           </div>
         </Content>

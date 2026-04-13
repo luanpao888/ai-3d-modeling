@@ -15,7 +15,7 @@ export class AiSessionService {
         `
           SELECT id, project_id, mode, status, created_at, updated_at, last_error
           FROM project_ai_sessions
-          WHERE project_id = $1 AND status IN ('active', 'waiting_user')
+          WHERE project_id = $1
           ORDER BY created_at DESC
           LIMIT 1
         `,
@@ -72,16 +72,38 @@ export class AiSessionService {
     return toMessage(rows[0]);
   }
 
-  async listHistory(projectId, sessionId) {
+  async listHistory(projectId, sessionId, options = {}) {
     const session = await this.getSession(projectId, sessionId);
+    const normalizedLimit = normalizePositiveInt(options.limit);
+    const normalizedOffset = normalizeNonNegativeInt(options.offset, 0);
 
-    const [messagesResult, questionsResult, decisionsResult] = await Promise.all([
+    const [messagesResult, messageCountResult, questionsResult, decisionsResult] = await Promise.all([
+      normalizedLimit
+        ? this.databaseService.query(
+            `
+              SELECT id, session_id, role, content, created_at
+              FROM project_ai_messages
+              WHERE session_id = $1
+              ORDER BY created_at DESC
+              OFFSET $2
+              LIMIT $3
+            `,
+            [sessionId, normalizedOffset, normalizedLimit]
+          )
+        : this.databaseService.query(
+            `
+              SELECT id, session_id, role, content, created_at
+              FROM project_ai_messages
+              WHERE session_id = $1
+              ORDER BY created_at ASC
+            `,
+            [sessionId]
+          ),
       this.databaseService.query(
         `
-          SELECT id, session_id, role, content, created_at
+          SELECT COUNT(*)::int AS count
           FROM project_ai_messages
           WHERE session_id = $1
-          ORDER BY created_at ASC
         `,
         [sessionId]
       ),
@@ -105,11 +127,17 @@ export class AiSessionService {
       )
     ]);
 
+    const totalMessages = messageCountResult.rows[0]?.count ?? 0;
+    const messageRows = normalizedLimit ? [...messagesResult.rows].reverse() : messagesResult.rows;
+    const loadedMessages = normalizedLimit ? normalizedOffset + messageRows.length : totalMessages;
+
     return {
       session,
-      messages: messagesResult.rows.map(toMessage),
+      messages: messageRows.map(toMessage),
       questions: questionsResult.rows.map(toQuestion),
-      decisions: decisionsResult.rows.map(toDecision)
+      decisions: decisionsResult.rows.map(toDecision),
+      hasMoreMessages: loadedMessages < totalMessages,
+      totalMessages
     };
   }
 
@@ -266,6 +294,24 @@ function toDecision(row) {
 
 function toIsoString(value) {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function normalizePositiveInt(input) {
+  const parsed = Number.parseInt(input ?? '', 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function normalizeNonNegativeInt(input, fallback = 0) {
+  const parsed = Number.parseInt(input ?? '', 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback;
+  }
+
+  return parsed;
 }
 
 function notFound(message) {

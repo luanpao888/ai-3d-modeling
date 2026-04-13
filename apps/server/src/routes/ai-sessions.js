@@ -22,9 +22,16 @@ export async function registerAiSessionRoutes(app) {
   });
 
   app.get('/:projectId/ai/sessions/:sessionId/history', async (request) => {
+    const limit = Number.parseInt(request.query?.limit ?? '', 10);
+    const offset = Number.parseInt(request.query?.offset ?? '', 10);
+
     return app.services.aiSessionService.listHistory(
       request.params.projectId,
-      request.params.sessionId
+      request.params.sessionId,
+      {
+        limit: Number.isFinite(limit) ? limit : undefined,
+        offset: Number.isFinite(offset) ? offset : 0
+      }
     );
   });
 

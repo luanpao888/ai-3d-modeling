@@ -5,6 +5,7 @@ import { exportDslToGlb, mountScenePreview } from '../lib/renderDsl.js';
 import { createApiClient } from '../services/apiClient.js';
 
 const api = createApiClient();
+const HISTORY_PAGE_SIZE = 3;
 
 export function useStudioWorkspace() {
   const { locale, setLocale, languages, t } = useI18n();
@@ -21,9 +22,13 @@ export function useStudioWorkspace() {
   const [dslDraft, setDslDraft] = useState('');
   const [dslTab, setDslTab] = useState('viewer');
   const [prompt, setPrompt] = useState(() => t('defaults.aiPrompt'));
+  const [senderResetKey, setSenderResetKey] = useState(0);
   const [sessionMode, setSessionMode] = useState('navigator');
   const [session, setSession] = useState(null);
   const [history, setHistory] = useState({ messages: [], questions: [], decisions: [] });
+  const [historyOffset, setHistoryOffset] = useState(0);
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
+  const [isLoadingOlderHistory, setIsLoadingOlderHistory] = useState(false);
   const [events, setEvents] = useState([]);
   const [assets, setAssets] = useState([]);
   const [status, setStatus] = useState({ key: 'status.bootingWorkspace' });
@@ -116,9 +121,15 @@ export function useStudioWorkspace() {
     ]);
 
     const nextSession = await api.createSession(projectId, sessionMode);
-    const nextHistory = await api.listSessionHistory(projectId, nextSession.id);
+    const nextHistory = await api.listSessionHistory(projectId, nextSession.id, {
+      limit: HISTORY_PAGE_SIZE,
+      offset: 0
+    });
 
     openProjectData(project, projectVersions, nextSession, nextHistory);
+    setHistoryOffset(nextHistory.messages?.length ?? 0);
+    setHasMoreHistory(Boolean(nextHistory.hasMoreMessages));
+    setEvents([]);
     connectEventStream(projectId, nextSession.id);
   }
 
@@ -180,15 +191,18 @@ export function useStudioWorkspace() {
     }
   }
 
-  async function handleGenerateDsl() {
-    if (!activeProject || !session || !prompt.trim()) {
+  async function handleGenerateDsl(nextPrompt) {
+    const outboundPrompt = String(nextPrompt ?? prompt).trim();
+    if (!activeProject || !session || !outboundPrompt) {
       return;
     }
 
     try {
       setIsRunning(true);
       setStatus({ key: 'status.generatingDsl' });
-      const result = await api.sendSessionMessage(activeProject.id, session.id, prompt);
+      const result = await api.sendSessionMessage(activeProject.id, session.id, outboundPrompt);
+      setPrompt('');
+      setSenderResetKey((current) => current + 1);
       await refreshProjectState(activeProject.id, session.id);
 
       if (result.status === 'waiting_user') {
@@ -231,9 +245,14 @@ export function useStudioWorkspace() {
 
     try {
       const nextSession = await api.createSession(activeProject.id, sessionMode);
-      const nextHistory = await api.listSessionHistory(activeProject.id, nextSession.id);
+      const nextHistory = await api.listSessionHistory(activeProject.id, nextSession.id, {
+        limit: HISTORY_PAGE_SIZE,
+        offset: 0
+      });
       setSession(nextSession);
       setHistory(nextHistory);
+      setHistoryOffset(nextHistory.messages?.length ?? 0);
+      setHasMoreHistory(Boolean(nextHistory.hasMoreMessages));
       setEvents([]);
       connectEventStream(activeProject.id, nextSession.id);
       setStatus({ key: 'status.sessionReady', values: { mode: t(`modes.${nextSession.mode}`) } });
@@ -243,14 +262,44 @@ export function useStudioWorkspace() {
   }
 
   async function refreshProjectState(projectId, sessionId) {
+    const desiredLimit = Math.max(historyOffset, HISTORY_PAGE_SIZE);
     const [project, projectVersions, nextHistory, nextSession] = await Promise.all([
       api.getProject(projectId),
       api.listVersions(projectId),
-      api.listSessionHistory(projectId, sessionId),
+      api.listSessionHistory(projectId, sessionId, { limit: desiredLimit, offset: 0 }),
       api.getSession(projectId, sessionId)
     ]);
 
     openProjectData(project, projectVersions, nextSession, nextHistory);
+    setHistoryOffset(nextHistory.messages?.length ?? 0);
+    setHasMoreHistory(Boolean(nextHistory.hasMoreMessages));
+  }
+
+  async function handleLoadOlderHistory() {
+    if (!activeProject || !session || !hasMoreHistory || isLoadingOlderHistory) {
+      return;
+    }
+
+    try {
+      setIsLoadingOlderHistory(true);
+      const nextHistory = await api.listSessionHistory(activeProject.id, session.id, {
+        limit: HISTORY_PAGE_SIZE,
+        offset: historyOffset
+      });
+
+      setHistory((current) => ({
+        ...current,
+        messages: mergeUniqueMessages(nextHistory.messages ?? [], current.messages ?? []),
+        questions: nextHistory.questions ?? current.questions,
+        decisions: nextHistory.decisions ?? current.decisions
+      }));
+      setHistoryOffset((current) => current + (nextHistory.messages?.length ?? 0));
+      setHasMoreHistory(Boolean(nextHistory.hasMoreMessages));
+    } catch (issue) {
+      setError(issue.message);
+    } finally {
+      setIsLoadingOlderHistory(false);
+    }
   }
 
   function connectEventStream(projectId, sessionId) {
@@ -362,6 +411,8 @@ export function useStudioWorkspace() {
     activeProject,
     versions,
     history,
+    hasMoreHistory,
+    isLoadingOlderHistory,
     events,
     assets,
     statusText,
@@ -372,6 +423,7 @@ export function useStudioWorkspace() {
     session,
     prompt,
     setPrompt,
+    senderResetKey,
     sidebarCollapsed,
     setSidebarCollapsed,
     dslModalOpen,
@@ -390,12 +442,29 @@ export function useStudioWorkspace() {
     handleOpenProject,
     handleGenerateDsl,
     handleResolveQuestion,
+    handleLoadOlderHistory,
     handleDownloadZip,
     handleExportGlb,
     handleToggleFullscreen,
     openDslModal,
     handleSaveDslFromModal
   };
+}
+
+function mergeUniqueMessages(olderMessages, currentMessages) {
+  const seen = new Set();
+  const merged = [];
+
+  for (const message of [...olderMessages, ...currentMessages]) {
+    if (!message || seen.has(message.id)) {
+      continue;
+    }
+
+    seen.add(message.id);
+    merged.push(message);
+  }
+
+  return merged;
 }
 
 function safeParseDsl(input) {

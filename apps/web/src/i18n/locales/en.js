@@ -33,6 +33,8 @@ export default {
     resolved: 'Resolved',
     noMessages: 'No messages yet. Start by sending a message to the agent.',
     loadingMore: 'Loading more history...',
+    pullToLoadPrevious: 'Scroll up to load older messages',
+    noMoreMessagesTop: 'No more messages',
     ctrlEnter: 'Press Enter to send, Shift+Enter for a new line',
     dslViewer: 'Viewer',
     dslEditor: 'Editor',
