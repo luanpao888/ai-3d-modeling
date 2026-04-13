@@ -14,6 +14,13 @@ export async function registerAiSessionRoutes(app) {
     return reply.code(201).send(session);
   });
 
+  app.get('/:projectId/ai/sessions/:sessionId', async (request) => {
+    return app.services.aiSessionService.getSession(
+      request.params.projectId,
+      request.params.sessionId
+    );
+  });
+
   app.get('/:projectId/ai/sessions/:sessionId/history', async (request) => {
     return app.services.aiSessionService.listHistory(
       request.params.projectId,

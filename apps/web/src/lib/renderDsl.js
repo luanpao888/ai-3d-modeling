@@ -54,15 +54,19 @@ export function mountScenePreview(container, dsl, assetIndex = {}) {
 
 export function buildSceneFromDsl(dsl, assetIndex = {}) {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#020617');
+  scene.background = new THREE.Color('#f7f7f5');
 
-  scene.add(new THREE.AmbientLight('#ffffff', 1.4));
+  scene.add(new THREE.AmbientLight('#ffffff', 1.5));
 
   const keyLight = new THREE.DirectionalLight('#ffffff', 1.5);
   keyLight.position.set(5, 10, 7);
   scene.add(keyLight);
 
-  scene.add(new THREE.GridHelper(20, 20, '#334155', '#1e293b'));
+  const fillLight = new THREE.DirectionalLight('#ffffff', 0.7);
+  fillLight.position.set(-4, 6, -2);
+  scene.add(fillLight);
+
+  scene.add(new THREE.GridHelper(20, 20, '#d1d5db', '#e5e7eb'));
 
   for (const node of dsl.nodes ?? []) {
     scene.add(createSceneObject(node, assetIndex));
@@ -108,7 +112,7 @@ function createSceneObject(node, assetIndex) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
     const edgeLines = new THREE.LineSegments(
       new THREE.EdgesGeometry(mesh.geometry),
-      new THREE.LineBasicMaterial({ color: '#e2e8f0' })
+      new THREE.LineBasicMaterial({ color: '#a3a3a3' })
     );
     object.add(mesh);
     object.add(edgeLines);

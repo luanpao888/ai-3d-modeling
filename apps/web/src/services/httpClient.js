@@ -49,6 +49,10 @@ export function createHttpClient(baseUrl = DEFAULT_BASE_URL) {
         body: { operations }
       });
     },
+    async listVersions(projectId) {
+      const payload = await request(`/projects/${projectId}/versions`);
+      return payload.items;
+    },
     async searchAssets(q = '', tags = []) {
       const params = new URLSearchParams();
       if (q) {
@@ -61,18 +65,35 @@ export function createHttpClient(baseUrl = DEFAULT_BASE_URL) {
       const payload = await request(`/assets/search?${params.toString()}`);
       return payload.items;
     },
-    async generateDsl({ prompt, currentDsl }) {
-      const payload = await request('/ai/generate-dsl', {
+    createSession(projectId, mode) {
+      return request(`/projects/${projectId}/ai/sessions`, {
         method: 'POST',
-        body: { prompt, currentDsl }
+        body: { mode }
       });
-      return payload.dsl;
+    },
+    getSession(projectId, sessionId) {
+      return request(`/projects/${projectId}/ai/sessions/${sessionId}`);
+    },
+    listSessionHistory(projectId, sessionId) {
+      return request(`/projects/${projectId}/ai/sessions/${sessionId}/history`);
+    },
+    sendSessionMessage(projectId, sessionId, message) {
+      return request(`/projects/${projectId}/ai/sessions/${sessionId}/messages`, {
+        method: 'POST',
+        body: { message }
+      });
+    },
+    resolveQuestion(projectId, sessionId, questionId, selectedOption, rationale = '') {
+      return request(`/projects/${projectId}/ai/sessions/${sessionId}/questions/${questionId}/decision`, {
+        method: 'POST',
+        body: { selectedOption, rationale }
+      });
+    },
+    createEventStream(projectId, sessionId) {
+      return new EventSource(`${baseUrl}/projects/${projectId}/ai/sessions/${sessionId}/events`);
     },
     downloadProjectZip(projectId) {
       return request(`/exports/${projectId}/zip`, { raw: true });
-    },
-    getProviders() {
-      return request('/ai/providers');
     }
   };
 }

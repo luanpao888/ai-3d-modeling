@@ -1,32 +1,61 @@
 export default {
   app: {
     title: 'AI 3D Modeling Studio',
-    tagline: 'Local-first DSL authoring for web and desktop.'
+    tagline: 'Project-scoped agent sessions for conversational 3D DSL authoring.'
   },
   sidebar: {
     newProject: 'New project',
     projects: 'Projects',
-    assetRegistry: 'Asset registry'
+    assetRegistry: 'Asset registry',
+    versions: 'Version timeline',
+    sessions: 'AI session'
   },
   toolbar: {
     noProjectSelected: 'No project selected',
     transport: 'Transport',
-    ai: 'AI',
     units: 'Units',
     unitsValue: 'meter / Y-up',
-    language: 'Language'
+    language: 'Language',
+    mode: 'Mode'
   },
   labels: {
-    aiPrompt: 'AI prompt',
+    aiPrompt: 'Agent message',
     sceneDsl: 'Scene DSL',
-    preview: 'Three.js preview'
+    preview: 'Three.js preview',
+    eventFeed: 'Run feed',
+    questions: 'Pending decisions',
+    currentVersion: 'Current version',
+    noQuestions: 'No pending ambiguity checkpoints.',
+    noEvents: 'The event stream will appear here during agent execution.',
+    sessionHistory: 'Session history',
+    chatTitle: 'Agent Session',
+    decision: 'Decision',
+    resolved: 'Resolved',
+    noMessages: 'No messages yet. Start by sending a message to the agent.',
+    loadingMore: 'Loading more history...',
+    ctrlEnter: 'Press Enter to send, Shift+Enter for a new line',
+    dslViewer: 'Viewer',
+    dslEditor: 'Editor',
+    jsonValid: 'JSON is valid.'
   },
   actions: {
     createProject: 'Create project',
-    generateDsl: 'Generate DSL',
+    generateDsl: 'Send to agent',
     saveDsl: 'Save DSL',
+    editDsl: 'Edit DSL',
     exportZip: 'Export ZIP',
-    exportGlb: 'Export GLB'
+    exportGlb: 'Export GLB',
+    reconnect: 'Reconnect stream',
+    createSession: 'Create session',
+    resolve: 'Continue with this option',
+    formatJson: 'Format JSON',
+    cancel: 'Cancel',
+    sendMessage: 'Send',
+    fullscreen: 'Fullscreen',
+    exitFullscreen: 'Exit fullscreen'
+  },
+  errors: {
+    jsonInvalid: 'Invalid JSON'
   },
   status: {
     bootingWorkspace: 'Booting workspace…',
@@ -35,16 +64,26 @@ export default {
     backendConnectionFailed: 'Backend connection failed. Start the server first.',
     openedProject: 'Opened {{name}}.',
     createdProject: 'Created {{name}}.',
-    dslSaved: 'DSL saved to disk.',
-    generatingDsl: 'Generating DSL with the active AI provider…',
-    aiSceneUpdated: 'AI scene update applied.',
+    dslSaved: 'DSL saved to the current project version chain.',
+    generatingDsl: 'Running the project agent…',
+    aiSceneUpdated: 'Agent scene update committed.',
     projectZipExported: 'Project ZIP exported.',
-    glbExported: 'GLB exported from the current Three.js scene.'
+    glbExported: 'GLB exported from the current Three.js scene.',
+    sessionReady: 'Agent session ready in {{mode}} mode.',
+    waitingUser: 'Waiting for your decision on an ambiguity checkpoint.',
+    streamConnected: 'Live event stream connected.',
+    streamDisconnected: 'Live event stream disconnected.',
+    sessionCompleted: 'Agent run completed.',
+    sessionFailed: 'Agent run failed.'
   },
   defaults: {
     projectName: 'Starter Project',
     projectDescription: 'Default AI 3D modeling workspace',
     createdFromWeb: 'Created from the web studio',
     aiPrompt: 'Add a chair and a table near the center of the room.'
+  },
+  modes: {
+    navigator: 'Navigator',
+    autopilot: 'Autopilot'
   }
 };
