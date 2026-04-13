@@ -21,7 +21,7 @@ export default {
   labels: {
     aiPrompt: 'Agent 消息',
     sceneDsl: '场景 DSL',
-    preview: 'Three.js 预览',
+    preview: '预览',
     eventFeed: '运行事件流',
     questions: '待决策问题',
     currentVersion: '当前版本',

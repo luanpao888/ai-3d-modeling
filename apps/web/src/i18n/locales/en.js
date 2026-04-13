@@ -21,7 +21,7 @@ export default {
   labels: {
     aiPrompt: 'Agent message',
     sceneDsl: 'Scene DSL',
-    preview: 'Three.js preview',
+    preview: 'preview',
     eventFeed: 'Run feed',
     questions: 'Pending decisions',
     currentVersion: 'Current version',
