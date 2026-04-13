@@ -121,20 +121,41 @@ docker compose -f docker-compose-local.yml build
 
 ---
 
-## 📦 Project Folder Model
+## 🏗️ Implementation Architecture (Refactor Plan)
 
-Each modeling project is stored locally as a folder:
+The system is evolving into a layered architecture where **Three.js handles rendering only**, while schema validation, interpretation, geometric precision, and persistence are decoupled.
 
-```text
-my-project/
-├── project.json
-├── scenes/
-├── assets/
-├── exports/
-└── meta/
-```
+### Layer-by-layer inputs, outputs, and goals
 
-Current backend endpoints include:
+| Layer | Input | Output | Data Type | Main Work | Final Goal |
+|---|---|---|---|---|---|
+| AI Generation Layer | Natural language prompt + optional current scene context | Candidate DSL payload | JSON object | Generate editable design intent with stable structure | Convert user intent into machine-editable scene data |
+| DSL Schema Layer | Raw DSL candidate | Validated and normalized DSL | JSON object | Schema validation, defaults, unit/axis constraints, backward compatibility | Ensure deterministic and model-safe DSL |
+| DSL Interpreter Layer | Normalized DSL | Geometry Intermediate Representation (Geometry IR) | In-memory objects | Translate semantic nodes into geometry commands (primitive/lathe/extrude/csg/brep) | Decouple authoring DSL from render/export engines |
+| Geometry Compute Layer | Geometry IR | Precision-managed geometry result | In-memory objects (mesh or B-Rep) | Boolean ops, parameter solving, precision and tolerance handling | Support high-precision modeling workflows |
+| Persistence Layer (Database) | Project/domain events + DSL snapshots + metadata | Durable project/version records | Database rows/documents + object/blob references | Multi-user isolation, project ownership, revisions, branching, audit trail | Enable collaboration and long lifecycle project management |
+| Delivery Layer (API) | IDs, queries, mutation commands | Typed API responses and streams | JSON/HTTP (plus binary download endpoints) | Auth, authorization, version query, patch apply, export task orchestration | Provide stable product-facing contract |
+| Render Layer (Three.js) | Render-ready mesh/scene graph | Interactive viewport frame | Runtime GPU objects | Preview, camera control, manipulation feedback | Fast visual iteration and UX |
+| Export Layer | Geometry result + project metadata | Manufacturing or exchange files | `.glb`, `.stl`, `.step`, `.3mf`, `.zip` | Format conversion, packaging, compatibility checks | Bridge design workflow to fabrication/CAD/toolchain |
+
+### Database-oriented persistence direction
+
+With database-backed persistence, project data is no longer tied to local folders only. The target model is:
+
+- Users can own multiple projects with isolated access control.
+- Each project keeps a version timeline (snapshots + patch history).
+- DSL and geometry artifacts can be independently versioned.
+- Large binary exports are tracked as artifact records with storage references.
+- APIs can support rollback, compare, and branch/merge style iteration.
+
+### Why this architecture reduces future refactor risk
+
+- DSL changes remain localized to schema/interpreter boundaries.
+- Geometry engine upgrades do not force renderer rewrites.
+- Three.js stays a presentation layer, not the source of geometric truth.
+- Persistence can evolve from local files to database/object storage without changing DSL semantics.
+
+### Current backend endpoints
 
 - `GET /health`
 - `GET /projects`
@@ -146,23 +167,6 @@ Current backend endpoints include:
 - `GET /assets/search`
 - `POST /ai/generate-dsl`
 - `GET /exports/:projectId/zip`
-
----
-
-## 🧠 DSL Design Philosophy
-
-> The DSL is **not** a mesh format.
-
-It is intentionally high-level:
-
-- It describes **scene structure**, not triangle-level geometry.
-- AI generates **editable JSON DSL**, not `glTF` blobs.
-- Reusable models are referenced via `assetId`, not raw URLs.
-- Units are always **meters**.
-- World orientation is always **Y-up**.
-- Patch operations (`add`, `update`, `delete`) enable incremental AI edits.
-
-This keeps generation deterministic, portable, auditable, and friendly to local storage.
 
 ---
 
