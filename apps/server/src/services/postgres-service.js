@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 const DEFAULT_DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5432/ai_3d_modeling';
 
 export class PostgresService {
-  constructor(env = {}) {
+  constructor(env = process.env) {
     this.pool = new Pool(buildPoolConfig(env));
   }
 
