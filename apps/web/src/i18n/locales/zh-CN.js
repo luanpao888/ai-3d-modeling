@@ -91,6 +91,6 @@ const zhCN = {
     autopilot: '自动驾驶',
     autopilotDesc: '让 Agent 自主运行，最小化人工干预。'
   }
-} as const;
+};
 
 export default zhCN;

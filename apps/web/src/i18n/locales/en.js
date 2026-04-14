@@ -91,6 +91,6 @@ const en = {
     autopilot: 'Autopilot',
     autopilotDesc: 'Let the agent run autonomously with minimal intervention.'
   }
-} as const;
+};
 
 export default en;

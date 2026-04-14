@@ -11,3 +11,5 @@ package-lock.json
 .env
 
 /apps/server/data/
+
+node_modules/

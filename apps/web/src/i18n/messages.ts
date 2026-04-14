@@ -1,5 +1,5 @@
-import en from './locales/en';
-import zhCN from './locales/zh-CN';
+import en from './locales/en.js';
+import zhCN from './locales/zh-CN.js';
 
 export const DEFAULT_LOCALE = 'en';
 

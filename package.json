@@ -13,6 +13,7 @@
     "start:server": "npm --workspace @ai3d/server run start",
     "dev:web": "npm --workspace @ai3d/web run dev -- --host 0.0.0.0",
     "dev:desktop": "concurrently -k -n server,web,electron \"npm run dev:server\" \"npm run dev:web\" \"npm --workspace @ai3d/electron run dev\"",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules node_modules/",
     "build": "npm --workspace @ai3d/web run build",
     "typecheck": "npm run typecheck:web && npm run typecheck:server",
     "typecheck:web": "npm --workspace @ai3d/web run typecheck",
