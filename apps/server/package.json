@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@ai3d/shared": "*",
@@ -17,5 +18,8 @@
     "nanoid": "^5.1.5",
     "openai": "^4.104.0",
     "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
   }
 }
