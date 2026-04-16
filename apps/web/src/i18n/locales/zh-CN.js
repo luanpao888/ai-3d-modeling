@@ -3,6 +3,25 @@ const zhCN = {
     title: 'AI 3D 建模工作台',
     tagline: '面向项目级多轮会话的 3D DSL 智能建模工作台。'
   },
+  nav: {
+    projects: '项目',
+    studio: '工作台',
+    assets: '资产库'
+  },
+  projects: {
+    noProjects: '还没有项目，创建一个开始吧。',
+    noVersions: '暂无版本记录。',
+    viewHistory: '版本历史',
+    form: {
+      name: '项目名称',
+      nameRequired: '项目名称不能为空',
+      description: '描述',
+      descriptionPlaceholder: '这个项目是做什么的？',
+      units: '长度单位',
+      upAxis: '上轴方向',
+      rotationUnit: '旋转单位'
+    }
+  },
   sidebar: {
     newProject: '新建项目',
     projects: '项目列表',

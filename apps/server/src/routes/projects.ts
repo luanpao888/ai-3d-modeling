@@ -4,8 +4,8 @@ export async function registerProjectRoutes(app) {
   }));
 
   app.post('/', async (request, reply) => {
-    const { name, description = '' } = request.body ?? {};
-    const project = await app.services.projectService.createProject({ name, description });
+    const { name, description = '', units, upAxis, rotationUnit } = request.body ?? {};
+    const project = await app.services.projectService.createProject({ name, description, units, upAxis, rotationUnit });
     return reply.code(201).send(project);
   });
 

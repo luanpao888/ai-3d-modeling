@@ -39,6 +39,8 @@ select {
 .studio-root {
   height: 100vh;
   background: transparent !important;
+  display: flex !important;
+  flex-direction: row !important;
 }
 
 .studio-root.ant-layout {
@@ -220,7 +222,7 @@ select {
 
 .studio-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(380px, 0.95fr);
+  grid-template-columns: 240px minmax(0, 1.35fr) minmax(380px, 0.95fr);
   gap: 16px;
   min-height: 0;
   height: calc(100vh - 164px);
@@ -387,6 +389,223 @@ select {
   --json-string: #b2762e;
   --json-boolean: #de1d8d;
   --json-null: #ff5b4f;
+}
+
+/* ── App Nav ── */
+
+.app-nav {
+  width: 64px;
+  min-width: 64px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 0;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.app-nav-btn {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 10px !important;
+  font-size: 18px !important;
+  color: #808080 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.app-nav-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #171717 !important;
+}
+
+.app-nav-btn--active {
+  background: #ebf5ff !important;
+  color: #0a72ef !important;
+}
+
+/* ── Page content (non-studio) ── */
+
+.page-content {
+  flex: 1;
+  min-width: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: transparent !important;
+}
+
+/* ── Projects page ── */
+
+.projects-page {
+  padding: 48px 32px;
+}
+
+.projects-page__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  gap: 16px;
+}
+
+.projects-page__title {
+  margin: 0 !important;
+  letter-spacing: -0.96px !important;
+}
+
+.projects-page__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 80px 0;
+}
+
+.projects-page__empty-icon {
+  font-size: 40px;
+  color: #d9d9d9;
+}
+
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.project-card {
+  border-radius: 12px !important;
+  box-shadow: rgba(0, 0, 0, 0.08) 0 0 0 1px, rgba(0, 0, 0, 0.04) 0 2px 8px !important;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.project-card:hover {
+  box-shadow: rgba(0, 0, 0, 0.12) 0 0 0 1px, rgba(10, 114, 239, 0.14) 0 0 0 3px, rgba(0, 0, 0, 0.06) 0 8px 24px !important;
+  transform: translateY(-1px);
+}
+
+.project-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-card__meta {
+  display: grid;
+  gap: 6px;
+}
+
+.project-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-card__name {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.24px;
+}
+
+.project-card__desc {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.project-card__tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.project-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.project-card__id {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: #aaa;
+  flex: 1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-history-entry {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 4px;
+}
+
+.version-history-entry__top {
+  display: flex;
+  align-items: center;
+}
+
+/* ── Create project modal ── */
+
+.create-project-modal .ant-modal-content {
+  border-radius: 16px;
+}
+
+.create-project-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* ── Studio sidebar (simplified) ── */
+
+.studio-sidebar {
+  width: 240px;
+  min-width: 240px;
+  height: 100%;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.studio-sidebar__back {
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.studio-sidebar__back-btn {
+  color: #666 !important;
+  font-size: 13px !important;
+}
+
+.studio-sidebar__section {
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.studio-sidebar__section-label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.studio-sidebar__section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
 }
 
 ::-webkit-scrollbar {

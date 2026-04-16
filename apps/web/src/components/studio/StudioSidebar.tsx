@@ -1,30 +1,10 @@
 import {
   AppstoreOutlined,
-  CodeOutlined,
-  FolderOpenOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  PlusOutlined,
-  RobotOutlined
+  ArrowLeftOutlined
 } from '@ant-design/icons';
-import { Badge, Button, Card, Input, List, Space, Tag, Timeline, Typography } from 'antd';
-import { Conversations } from '@ant-design/x';
-import type { ReactNode } from 'react';
+import { Badge, Button, List, Typography } from 'antd';
 
-const { Text, Title } = Typography;
-
-interface ProjectItem {
-  id: string;
-  name?: string;
-  currentVersion?: {
-    versionNumber?: number;
-  };
-}
-
-interface VersionItem {
-  versionNumber?: number;
-  source?: string;
-}
+const { Text } = Typography;
 
 interface AssetItem {
   id: string;
@@ -32,133 +12,44 @@ interface AssetItem {
 }
 
 interface Props {
-  collapsed: boolean;
-  onToggle: () => void;
   t: (key: string) => string;
-  projectName: string;
-  onProjectNameChange: (value: string) => void;
-  onCreateProject: () => void;
-  projects: ProjectItem[];
-  activeProjectId?: string;
-  onOpenProject: (projectId: string) => void;
-  versions: VersionItem[];
   assets: AssetItem[];
+  onNavigateToProjects: () => void;
 }
 
-export function StudioSidebar({
-  collapsed,
-  onToggle,
-  t,
-  projectName,
-  onProjectNameChange,
-  onCreateProject,
-  projects,
-  activeProjectId,
-  onOpenProject,
-  versions,
-  assets
-}: Props) {
-  const projectConversationItems = projects.map((project) => ({
-    key: project.id,
-    label: (
-      <div className="studio-project-row">
-        <div className="studio-project-row__top">
-          <Text className="studio-project-name">{project.name}</Text>
-          <Tag bordered={false} className="studio-version-tag">
-            v{project.currentVersion?.versionNumber ?? 1}
-          </Tag>
-        </div>
-        <Text className="studio-project-id">{project.id}</Text>
-      </div>
-    ) as ReactNode,
-    icon: <FolderOpenOutlined />
-  }));
-
+export function StudioSidebar({ t, assets, onNavigateToProjects }: Props) {
   return (
-    <>
-      <div className="studio-sider-top">
+    <div className="studio-sidebar">
+      <div className="studio-sidebar__back">
         <Button
           type="text"
-          className="studio-collapse-button"
-          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          onClick={onToggle}
-        />
-        {!collapsed ? (
-          <div className="studio-brand-copy">
-            <Text className="studio-eyebrow">Project agent workspace</Text>
-            <Title level={3}>{t('app.title')}</Title>
-            <Text>{t('app.tagline')}</Text>
-          </div>
-        ) : null}
+          icon={<ArrowLeftOutlined />}
+          onClick={onNavigateToProjects}
+          className="studio-sidebar__back-btn"
+        >
+          {t('nav.projects')}
+        </Button>
       </div>
 
-      {!collapsed ? (
-        <div className="studio-sider-scroll">
-          <Card className="studio-card" bordered={false}>
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <Text className="studio-eyebrow">{t('sidebar.newProject')}</Text>
-              <Input value={projectName} onChange={(event) => onProjectNameChange(event.target.value)} />
-              <Button type="primary" icon={<PlusOutlined />} onClick={onCreateProject}>
-                {t('actions.createProject')}
-              </Button>
-            </Space>
-          </Card>
-
-          <Card
-            className="studio-card"
-            bordered={false}
-            title={t('sidebar.projects')}
-            extra={<Badge count={projects.length} style={{ background: '#ebf5ff', color: '#0068d6' }} />}
-          >
-            <Conversations
-              items={projectConversationItems}
-              activeKey={activeProjectId}
-              onActiveChange={(key) => onOpenProject(String(key))}
-              className="studio-conversations"
-            />
-          </Card>
-
-          <Card className="studio-card" bordered={false} title={t('sidebar.versions')}>
-            <Timeline
-              items={versions.map((version) => ({
-                color: '#0a72ef',
-                children: (
-                  <div className="studio-timeline-entry">
-                    <Text strong>v{version.versionNumber}</Text>
-                    <Text type="secondary">{version.source}</Text>
-                  </div>
-                )
-              }))}
-            />
-          </Card>
-
-          <Card
-            className="studio-card"
-            bordered={false}
-            title={t('sidebar.assetRegistry')}
-            extra={<Badge count={assets.length} style={{ background: '#ebebeb', color: '#171717' }} />}
-          >
-            <List
-              dataSource={assets}
-              renderItem={(asset) => (
-                <List.Item className="studio-asset-row">
-                  <List.Item.Meta
-                    avatar={<AppstoreOutlined className="studio-asset-icon" />}
-                    title={<Text>{asset.name}</Text>}
-                    description={<Text type="secondary">{asset.id}</Text>}
-                  />
-                </List.Item>
-              )}
-            />
-          </Card>
+      <div className="studio-sidebar__section">
+        <div className="studio-sidebar__section-header">
+          <Text className="studio-eyebrow studio-sidebar__section-label">{t('sidebar.assetRegistry')}</Text>
+          <Badge count={assets.length} style={{ background: '#ebebeb', color: '#171717' }} />
         </div>
-      ) : (
-        <div className="studio-sider-collapsed-icons">
-          <Button type="text" icon={<FolderOpenOutlined />} />
-          <Button type="text" icon={<CodeOutlined />} />
-          <Button type="text" icon={<RobotOutlined />} />
-        </div>
-      )}
-    </>
+        <List
+          dataSource={assets}
+          renderItem={(asset) => (
+            <List.Item className="studio-asset-row">
+              <List.Item.Meta
+                avatar={<AppstoreOutlined className="studio-asset-icon" />}
+                title={<Text>{asset.name}</Text>}
+                description={<Text type="secondary">{asset.id}</Text>}
+              />
+            </List.Item>
+          )}
+        />
+      </div>
+    </div>
   );
 }
+

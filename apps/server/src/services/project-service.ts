@@ -44,7 +44,7 @@ export class ProjectService {
     }));
   }
 
-  async createProject({ name, description = '' }: { name?: string; description?: string }) {
+  async createProject({ name, description = '', units, upAxis, rotationUnit }: { name?: string; description?: string; units?: string; upAxis?: string; rotationUnit?: string }) {
     if (!name?.trim()) {
       throw new Error('Project name is required');
     }
@@ -53,6 +53,8 @@ export class ProjectService {
     const baseId = slugifyName(normalizedName) || 'project';
     const projectId = `${baseId}-${nanoid(6)}`;
     const dsl = createDefaultDsl(`${normalizedName} Scene`);
+    const resolvedUnits = units ?? dsl.units;
+    const resolvedUpAxis = upAxis ?? dsl.upAxis;
     const versionId = nanoid(12);
 
     await this.databaseService.withTransaction(async (client) => {
@@ -66,8 +68,8 @@ export class ProjectService {
           baseId,
           normalizedName,
           description,
-          dsl.units,
-          dsl.upAxis,
+          resolvedUnits,
+          resolvedUpAxis,
           'db://dsl/current'
         ]
       );

@@ -3,6 +3,25 @@ const en = {
     title: 'AI 3D Modeling Studio',
     tagline: 'Project-scoped agent sessions for conversational 3D DSL authoring.'
   },
+  nav: {
+    projects: 'Projects',
+    studio: 'Studio',
+    assets: 'Assets'
+  },
+  projects: {
+    noProjects: 'No projects yet. Create one to get started.',
+    noVersions: 'No versions found.',
+    viewHistory: 'Version history',
+    form: {
+      name: 'Project name',
+      nameRequired: 'Project name is required',
+      description: 'Description',
+      descriptionPlaceholder: 'What is this project about?',
+      units: 'Length unit',
+      upAxis: 'Up axis',
+      rotationUnit: 'Rotation unit'
+    }
+  },
   sidebar: {
     newProject: 'New project',
     projects: 'Projects',

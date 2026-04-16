@@ -4,6 +4,10 @@ export const DSL_VERSION = '1.0.0';
 export const UNIT_SYSTEM = 'meter';
 export const UP_AXIS = 'Y';
 
+export const LENGTH_UNITS = ['meter', 'centimeter', 'millimeter', 'inch', 'foot'];
+export const UP_AXES = ['Y', 'Z'];
+export const ROTATION_UNITS = ['radian', 'degree'];
+
 const vector3Schema = z.tuple([z.number(), z.number(), z.number()]);
 
 const materialSchema = z
@@ -47,8 +51,8 @@ export const sceneNodeSchema = z.union([primitiveNodeSchema, assetNodeSchema]);
 
 export const dslSchema = z.object({
   version: z.string().default(DSL_VERSION),
-  units: z.literal(UNIT_SYSTEM).default(UNIT_SYSTEM),
-  upAxis: z.literal(UP_AXIS).default(UP_AXIS),
+  units: z.enum(LENGTH_UNITS).default(UNIT_SYSTEM),
+  upAxis: z.enum(UP_AXES).default(UP_AXIS),
   metadata: z
     .object({
       sceneName: z.string().optional(),
@@ -69,8 +73,9 @@ export const projectManifestSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string().default(''),
-  units: z.literal(UNIT_SYSTEM).default(UNIT_SYSTEM),
-  upAxis: z.literal(UP_AXIS).default(UP_AXIS),
+  units: z.enum(LENGTH_UNITS).default(UNIT_SYSTEM),
+  upAxis: z.enum(UP_AXES).default(UP_AXIS),
+  rotationUnit: z.enum(ROTATION_UNITS).default('radian'),
   mainScene: z.string().default('scenes/main.dsl.json'),
   createdAt: z.string(),
   updatedAt: z.string()

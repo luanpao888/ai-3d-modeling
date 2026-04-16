@@ -35,7 +35,6 @@ export function useStudioWorkspace() {
   const previewRef = useRef<HTMLDivElement | null>(null);
   const previewShellRef = useRef<HTMLDivElement | null>(null);
 
-  const [projectName, setProjectName] = useState(() => t('defaults.projectName'));
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [activeProject, setActiveProject] = useState<ProjectRecord | null>(null);
   const [versions, setVersions] = useState<VersionRecord[]>([]);
@@ -55,9 +54,9 @@ export function useStudioWorkspace() {
   const [status, setStatus] = useState<StatusState>({ key: 'status.bootingWorkspace' });
   const [error, setError] = useState('');
   const [isRunning, setIsRunning] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [dslModalOpen, setDslModalOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
 
   const transportMode = 'HTTP / SSE';
   const assetIndex = useMemo<Record<string, AssetRecord>>(
@@ -82,7 +81,7 @@ export function useStudioWorkspace() {
     const parsedDsl = safeParseDsl(dslText) ?? activeProject?.dsl;
     const cleanup = mountScenePreview(previewRef.current, parsedDsl, assetIndex);
     return () => cleanup?.();
-  }, [dslText, activeProject, assetIndex]);
+  }, [dslText, activeProject, assetIndex, previewKey]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -105,18 +104,13 @@ export function useStudioWorkspace() {
       setAssets(registryAssets);
 
       const projectList = await api.listProjects();
-      if (projectList.length === 0) {
-        const created = await api.createProject({
-          name: t('defaults.projectName'),
-          description: t('defaults.projectDescription')
-        });
-        await syncProjects(created.id, true);
-        setStatus({ key: 'status.starterProjectCreated' });
-        return;
-      }
+      setProjects(projectList);
 
-      await syncProjects(projectList[0].id, true);
-      setStatus({ key: 'status.loadedProjects', values: { count: projectList.length } });
+      if (projectList.length > 0) {
+        setStatus({ key: 'status.loadedProjects', values: { count: projectList.length } });
+      } else {
+        setStatus({ key: 'status.bootingWorkspace' });
+      }
     } catch (issue) {
       setError(getErrorMessage(issue));
       setStatus({ key: 'status.backendConnectionFailed' });
@@ -186,18 +180,17 @@ export function useStudioWorkspace() {
     }
   }
 
-  async function handleCreateProject() {
+  async function handleCreateProject(data: Record<string, unknown>) {
     try {
-      const nextProjectName = projectName.trim() || t('defaults.projectName');
       const created = await api.createProject({
-        name: nextProjectName,
-        description: t('defaults.createdFromWeb')
+        description: t('defaults.createdFromWeb'),
+        ...data
       });
       await syncProjects(created.id, true);
-      setProjectName(nextProjectName);
       setStatus({ key: 'status.createdProject', values: { name: created.name as string } });
     } catch (issue) {
       setError(getErrorMessage(issue));
+      throw issue;
     }
   }
 
@@ -439,8 +432,6 @@ export function useStudioWorkspace() {
     setLocale,
     languages,
     t,
-    projectName,
-    setProjectName,
     projects,
     activeProject,
     versions,
@@ -458,8 +449,6 @@ export function useStudioWorkspace() {
     prompt,
     setPrompt,
     senderResetKey,
-    sidebarCollapsed,
-    setSidebarCollapsed,
     dslModalOpen,
     setDslModalOpen,
     dslDraft,
@@ -481,7 +470,8 @@ export function useStudioWorkspace() {
     handleExportGlb,
     handleToggleFullscreen,
     openDslModal,
-    handleSaveDslFromModal
+    handleSaveDslFromModal,
+    remountPreview: () => setPreviewKey((k) => k + 1)
   };
 }
 
