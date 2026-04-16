@@ -19,7 +19,22 @@ const zhCN = {
       descriptionPlaceholder: '这个项目是做什么的？',
       units: '长度单位',
       upAxis: '上轴方向',
-      rotationUnit: '旋转单位'
+      rotationUnit: '旋转单位',
+      unitOptions: {
+        meter: { label: 'm — 米', desc: '建筑、室外场景' },
+        centimeter: { label: 'cm — 厘米', desc: '家具、产品设计' },
+        millimeter: { label: 'mm — 毫米', desc: '精密零件、3D 打印' },
+        inch: { label: 'in — 英寸', desc: '美国工业标准' },
+        foot: { label: 'ft — 英尺', desc: '美国建筑标准' }
+      },
+      upAxisOptions: {
+        Y: '（Three.js / glTF 默认）',
+        Z: '（Blender / CAD）'
+      },
+      rotationUnitOptions: {
+        radian: '（Three.js 原生）',
+        degree: '（更适合 AI 提示词）'
+      }
     }
   },
   sidebar: {

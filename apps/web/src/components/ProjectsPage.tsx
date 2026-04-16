@@ -53,7 +53,6 @@ interface CreateProjectData {
   description?: string;
   units: string;
   upAxis: string;
-  rotationUnit: string;
 }
 
 interface Props {
@@ -64,13 +63,7 @@ interface Props {
   onLoadVersions: (projectId: string) => Promise<VersionItem[]>;
 }
 
-const UNIT_OPTIONS = [
-  { value: 'meter', label: 'm — Meter', desc: 'Architecture, outdoor scenes' },
-  { value: 'centimeter', label: 'cm — Centimeter', desc: 'Furniture, product design' },
-  { value: 'millimeter', label: 'mm — Millimeter', desc: 'Precision parts, 3D printing' },
-  { value: 'inch', label: 'in — Inch', desc: 'US industrial standard' },
-  { value: 'foot', label: 'ft — Foot', desc: 'US architecture' }
-];
+const UNIT_KEYS = ['meter', 'centimeter', 'millimeter', 'inch', 'foot'] as const;
 
 const UNIT_ABBR: Record<string, string> = {
   meter: 'm',
@@ -106,7 +99,7 @@ export function ProjectsPage({ t, projects, onCreateProject, onOpenProject, onLo
   async function handleSubmit(values: CreateProjectData) {
     setSubmitting(true);
     try {
-      await onCreateProject(values);
+      await onCreateProject({ ...values, rotationUnit: 'radian' } as CreateProjectData & { rotationUnit: string });
       setModalOpen(false);
       form.resetFields();
     } finally {
@@ -117,8 +110,7 @@ export function ProjectsPage({ t, projects, onCreateProject, onOpenProject, onLo
   function handleOpenModal() {
     form.setFieldsValue({
       units: 'meter',
-      upAxis: 'Y',
-      rotationUnit: 'radian'
+      upAxis: 'Y'
     });
     setModalOpen(true);
   }
@@ -273,7 +265,7 @@ export function ProjectsPage({ t, projects, onCreateProject, onOpenProject, onLo
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
-          initialValues={{ units: 'meter', upAxis: 'Y', rotationUnit: 'radian' }}
+          initialValues={{ units: 'meter', upAxis: 'Y' }}
         >
           <Form.Item
             name="name"
@@ -289,13 +281,13 @@ export function ProjectsPage({ t, projects, onCreateProject, onOpenProject, onLo
 
           <Form.Item name="units" label={t('projects.form.units')}>
             <Select
-              options={UNIT_OPTIONS.map((u) => ({
-                value: u.value,
+              options={UNIT_KEYS.map((key) => ({
+                value: key,
                 label: (
                   <span>
-                    <Text strong>{u.label}</Text>{' '}
+                    <Text strong>{t(`projects.form.unitOptions.${key}.label`)}</Text>{' '}
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      {u.desc}
+                      {t(`projects.form.unitOptions.${key}.desc`)}
                     </Text>
                   </span>
                 )
@@ -305,15 +297,8 @@ export function ProjectsPage({ t, projects, onCreateProject, onOpenProject, onLo
 
           <Form.Item name="upAxis" label={t('projects.form.upAxis')}>
             <Radio.Group>
-              <Radio value="Y">Y-up <Text type="secondary">(Three.js / glTF default)</Text></Radio>
-              <Radio value="Z">Z-up <Text type="secondary">(Blender / CAD)</Text></Radio>
-            </Radio.Group>
-          </Form.Item>
-
-          <Form.Item name="rotationUnit" label={t('projects.form.rotationUnit')}>
-            <Radio.Group>
-              <Radio value="radian">Radian <Text type="secondary">(Three.js native)</Text></Radio>
-              <Radio value="degree">Degree <Text type="secondary">(easier for AI prompts)</Text></Radio>
+              <Radio value="Y">Y-up <Text type="secondary">{t('projects.form.upAxisOptions.Y')}</Text></Radio>
+              <Radio value="Z">Z-up <Text type="secondary">{t('projects.form.upAxisOptions.Z')}</Text></Radio>
             </Radio.Group>
           </Form.Item>
 

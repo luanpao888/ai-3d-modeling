@@ -19,7 +19,22 @@ const en = {
       descriptionPlaceholder: 'What is this project about?',
       units: 'Length unit',
       upAxis: 'Up axis',
-      rotationUnit: 'Rotation unit'
+      rotationUnit: 'Rotation unit',
+      unitOptions: {
+        meter: { label: 'm — Meter', desc: 'Architecture, outdoor scenes' },
+        centimeter: { label: 'cm — Centimeter', desc: 'Furniture, product design' },
+        millimeter: { label: 'mm — Millimeter', desc: 'Precision parts, 3D printing' },
+        inch: { label: 'in — Inch', desc: 'US industrial standard' },
+        foot: { label: 'ft — Foot', desc: 'US architecture' }
+      },
+      upAxisOptions: {
+        Y: '(Three.js / glTF default)',
+        Z: '(Blender / CAD)'
+      },
+      rotationUnitOptions: {
+        radian: '(Three.js native)',
+        degree: '(easier for AI prompts)'
+      }
     }
   },
   sidebar: {

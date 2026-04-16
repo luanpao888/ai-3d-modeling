@@ -8,7 +8,6 @@ import { ProjectsPage } from './components/ProjectsPage';
 import { StudioChatPanel } from './components/studio/StudioChatPanel';
 import { StudioDslModal } from './components/studio/StudioDslModal';
 import { StudioPreviewPanel } from './components/studio/StudioPreviewPanel';
-import { StudioSidebar } from './components/studio/StudioSidebar';
 import { StudioThemeProvider } from './components/studio/StudioThemeProvider';
 import { StudioToolbar } from './components/studio/StudioToolbar';
 import { useStudioWorkspace } from './hooks/useStudioWorkspace';
@@ -51,11 +50,6 @@ function StudioView({
         </Card>
       ) : null}
       <div className="studio-workspace">
-        <StudioSidebar
-          t={workspace.t}
-          assets={workspace.assets}
-          onNavigateToProjects={onNavigateToProjects}
-        />
         <StudioPreviewPanel
           t={workspace.t}
           activeProject={workspace.activeProject}
@@ -96,7 +90,7 @@ export default function App() {
     navigate('/studio');
   }
 
-  async function handleCreateProject(data: { name: string; description?: string; units: string; upAxis: string; rotationUnit: string }) {
+  async function handleCreateProject(data: { name: string; description?: string; units: string; upAxis: string }) {
     await workspace.handleCreateProject(data as Record<string, unknown>);
     navigate('/studio');
   }

@@ -74,10 +74,16 @@ export function mountScenePreview(
   };
 
   window.addEventListener('resize', handleResize);
+  document.addEventListener('fullscreenchange', handleResize);
+
+  const resizeObserver = new ResizeObserver(handleResize);
+  resizeObserver.observe(container);
 
   return () => {
     window.cancelAnimationFrame(frameId);
     window.removeEventListener('resize', handleResize);
+    document.removeEventListener('fullscreenchange', handleResize);
+    resizeObserver.disconnect();
     controls.dispose();
     renderer.dispose();
     container.innerHTML = '';
