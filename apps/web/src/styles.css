@@ -249,6 +249,25 @@ select {
   border-radius: 12px;
   background: linear-gradient(180deg, #ffffff, #fafafa);
   box-shadow: rgb(235, 235, 235) 0 0 0 1px;
+  position: relative;
+}
+
+.studio-preview-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: all;
+  animation: studio-overlay-fade-in 0.2s ease;
+}
+
+@keyframes studio-overlay-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .studio-preview-shell:fullscreen,

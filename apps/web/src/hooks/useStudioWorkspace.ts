@@ -223,9 +223,22 @@ export function useStudioWorkspace() {
     try {
       setIsRunning(true);
       setStatus({ key: 'status.generatingDsl' });
-      const result = await api.sendSessionMessage(activeProject.id, session.id, outboundPrompt);
+
+      // Optimistically show the user message and clear the input immediately
+      const optimisticMessage: MessageRecord = {
+        id: `optimistic-${Date.now()}`,
+        role: 'user',
+        content: { text: outboundPrompt },
+        createdAt: new Date().toISOString()
+      };
+      setHistory((current) => ({
+        ...current,
+        messages: [...(current.messages ?? []), optimisticMessage]
+      }));
       setPrompt('');
       setSenderResetKey((current) => current + 1);
+
+      const result = await api.sendSessionMessage(activeProject.id, session.id, outboundPrompt);
       await refreshProjectState(activeProject.id, session.id);
 
       if (result.status === 'waiting_user') {
@@ -289,17 +302,30 @@ export function useStudioWorkspace() {
   }
 
   async function refreshProjectState(projectId: string, sessionId: string) {
-    const desiredLimit = Math.max(historyOffset, HISTORY_PAGE_SIZE);
-    const [project, projectVersions, nextHistory, nextSession] = await Promise.all([
+    const [project, projectVersions, newHistory, nextSession] = await Promise.all([
       api.getProject(projectId),
       api.listVersions(projectId),
-      api.listSessionHistory(projectId, sessionId, { limit: desiredLimit, offset: 0 }),
+      api.listSessionHistory(projectId, sessionId, { limit: HISTORY_PAGE_SIZE * 2, offset: historyOffset }),
       api.getSession(projectId, sessionId)
     ]);
 
-    openProjectData(project, projectVersions, nextSession, nextHistory);
-    setHistoryOffset(nextHistory.messages?.length ?? 0);
-    setHasMoreHistory(Boolean(nextHistory.hasMoreMessages));
+    const nextDslText = JSON.stringify(project.dsl, null, 2);
+    setActiveProject(project);
+    setVersions(projectVersions);
+    setSession(nextSession);
+    setHistory((current) => ({
+      messages: mergeUniqueMessages(
+        (current.messages ?? []).filter((m) => !m.id.startsWith('optimistic-')),
+        newHistory.messages ?? []
+      ),
+      questions: newHistory.questions ?? current.questions,
+      decisions: newHistory.decisions ?? current.decisions
+    }));
+    setDslText(nextDslText);
+    setDslDraft(nextDslText);
+    setError('');
+    setHistoryOffset((current) => current + (newHistory.messages?.length ?? 0));
+    setHasMoreHistory(Boolean(newHistory.hasMoreMessages));
   }
 
   async function handleLoadOlderHistory() {

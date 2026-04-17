@@ -1,5 +1,5 @@
 import { ArrowsAltOutlined, CodeOutlined, ExportOutlined } from '@ant-design/icons';
-import { Button, Card, Dropdown, Flex, Space, Typography } from 'antd';
+import { Button, Card, Dropdown, Flex, Space, Spin, Typography } from 'antd';
 import type { RefObject } from 'react';
 
 const { Text } = Typography;
@@ -8,6 +8,7 @@ interface Props {
   t: (key: string) => string;
   activeProject: { id?: string } | null;
   isFullscreen: boolean;
+  isRunning: boolean;
   previewShellRef: RefObject<HTMLDivElement | null>;
   previewRef: RefObject<HTMLDivElement | null>;
   onOpenDsl: () => void;
@@ -20,6 +21,7 @@ export function StudioPreviewPanel({
   t,
   activeProject,
   isFullscreen,
+  isRunning,
   previewShellRef,
   previewRef,
   onOpenDsl,
@@ -63,6 +65,11 @@ export function StudioPreviewPanel({
 
       <div className="studio-preview-shell" ref={previewShellRef}>
         <div className="studio-preview-canvas" ref={previewRef} />
+        {isRunning && (
+          <div className="studio-preview-overlay">
+            <Spin size="large" />
+          </div>
+        )}
       </div>
     </Card>
   );

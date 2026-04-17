@@ -54,6 +54,7 @@ function StudioView({
           t={workspace.t}
           activeProject={workspace.activeProject}
           isFullscreen={workspace.isFullscreen}
+          isRunning={workspace.isRunning}
           previewShellRef={workspace.previewShellRef}
           previewRef={workspace.previewRef}
           onOpenDsl={workspace.openDslModal}

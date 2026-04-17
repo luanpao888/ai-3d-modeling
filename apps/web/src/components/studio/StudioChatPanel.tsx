@@ -1,7 +1,7 @@
-import { AppstoreOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, LoadingOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
 import { Bubble, Sender } from '@ant-design/x';
 import { Button, Card, Empty, Flex, Space, Tag, Typography } from 'antd';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const { Text, Title } = Typography;
 
@@ -72,6 +72,7 @@ export function StudioChatPanel({
 }: Props) {
   const [isAtTop, setIsAtTop] = useState(false);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+  const prevItemCountRef = useRef(0);
 
   const mergedTimelineItems = useMemo(() => {
     const records: Array<{ key: string; role: 'user' | 'ai' | 'system'; order: number; content: React.ReactNode }> = [];
@@ -172,6 +173,20 @@ export function StudioChatPanel({
 
   const canLoadMore = Boolean(hasMoreHistory);
 
+  // Scroll to bottom when new messages are appended (not when loading older history)
+  useEffect(() => {
+    const container = timelineScrollRef.current;
+    if (!container) {
+      return;
+    }
+    const prevCount = prevItemCountRef.current;
+    const nextCount = mergedTimelineItems.length;
+    prevItemCountRef.current = nextCount;
+    if (nextCount > prevCount && !isLoadingOlderHistory) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [mergedTimelineItems.length, isLoadingOlderHistory]);
+
   function handleTimelineScroll(event: React.UIEvent<HTMLDivElement>) {
     setIsAtTop(event.currentTarget.scrollTop <= 24);
 
@@ -236,6 +251,13 @@ export function StudioChatPanel({
           placeholder={t('labels.aiPrompt')}
           autoSize={{ minRows: 3, maxRows: 6 }}
           footer={<Text type="secondary">{t('labels.ctrlEnter')}</Text>}
+          suffix={(oriNode) =>
+            isRunning ? (
+              <Button shape="circle" type="primary" icon={<LoadingOutlined spin />} disabled />
+            ) : (
+              oriNode
+            )
+          }
         />
       </div>
     </Card>
