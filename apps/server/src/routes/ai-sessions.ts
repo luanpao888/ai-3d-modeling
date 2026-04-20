@@ -67,19 +67,47 @@ export async function registerAiSessionRoutes(app: FastifyInstance) {
     );
   });
 
-  app.post<{ Params: SessionParams; Body: SendMessageBody }>('/:projectId/ai/sessions/:sessionId/messages', async (request) => {
+  app.post<{ Params: SessionParams; Body: SendMessageBody }>('/:projectId/ai/sessions/:sessionId/messages', async (request, reply) => {
+    const { projectId, sessionId } = request.params;
     const message = request.body?.message ?? '';
-    const session = await app.services.aiSessionService.getSession(
-      request.params.projectId,
-      request.params.sessionId
-    );
+    const session = await app.services.aiSessionService.getSession(projectId, sessionId);
 
-    return app.services.aiOrchestratorService.runTurn({
-      projectId: request.params.projectId,
-      sessionId: request.params.sessionId,
-      mode: session.mode,
-      userMessage: message
-    });
+    reply.hijack();
+    const raw = reply.raw;
+    raw.setHeader('Content-Type', 'text/event-stream');
+    raw.setHeader('Cache-Control', 'no-cache, no-transform');
+    raw.setHeader('Connection', 'keep-alive');
+    raw.setHeader('X-Accel-Buffering', 'no');
+    raw.write('retry: 3000\n\n');
+    if (typeof (raw as any).flushHeaders === 'function') {
+      (raw as any).flushHeaders();
+    }
+
+    let seq = 0;
+    function writeEvent(event: string, payload: unknown) {
+      const id = String(++seq);
+      const data = JSON.stringify(payload ?? {});
+      raw.write(`id: ${id}\nevent: ${event}\ndata: ${data}\n\n`);
+      // Also broadcast to global /events channel
+      app.services.aiStreamService.emit(sessionId, event, payload);
+    }
+
+    try {
+      await app.services.aiOrchestratorService.runTurn({
+        projectId,
+        sessionId,
+        mode: session.mode,
+        userMessage: message,
+        emit: writeEvent
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      writeEvent('run.failed', { message: msg });
+    } finally {
+      if (!raw.writableEnded) {
+        raw.end();
+      }
+    }
   });
 
   app.post<{ Params: DecisionParams; Body: DecisionBody }>(

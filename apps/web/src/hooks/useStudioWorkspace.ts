@@ -54,6 +54,8 @@ export function useStudioWorkspace() {
   const [status, setStatus] = useState<StatusState>({ key: 'status.bootingWorkspace' });
   const [error, setError] = useState('');
   const [isRunning, setIsRunning] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
   const [dslModalOpen, setDslModalOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
@@ -238,13 +240,45 @@ export function useStudioWorkspace() {
       setPrompt('');
       setSenderResetKey((current) => current + 1);
 
-      const result = await api.sendSessionMessage(activeProject.id, session.id, outboundPrompt);
-      await refreshProjectState(activeProject.id, session.id);
+      const capturedProjectId = activeProject.id;
+      const capturedSessionId = session.id;
+      setStreamingText('');
+      setIsStreaming(true);
 
-      if (result.status === 'waiting_user') {
-        setStatus({ key: 'status.waitingUser' });
-      } else {
-        setStatus({ key: 'status.sessionCompleted' });
+      const result = await api.sendSessionMessage(
+        capturedProjectId,
+        capturedSessionId,
+        outboundPrompt,
+        {
+          onToken: (delta) => setStreamingText((prev) => prev + delta),
+          onThinking: (_step, message) => setStatus({ key: 'status.generatingDsl', values: { detail: message } }),
+          onDslCommitted: async () => {
+            await refreshProjectState(capturedProjectId, capturedSessionId);
+          },
+          onDslPartial: async () => {
+            const partialProject = await api.getProject(capturedProjectId).catch(() => null);
+            if (partialProject) {
+              const nextDslText = JSON.stringify(partialProject.dsl, null, 2);
+              setActiveProject(partialProject);
+              setDslText(nextDslText);
+              setDslDraft(nextDslText);
+            }
+          },
+          onDone: (finalStatus) => {
+            setIsStreaming(false);
+            setStreamingText('');
+            if (finalStatus === 'waiting_user') {
+              setStatus({ key: 'status.waitingUser' });
+            } else {
+              setStatus({ key: 'status.sessionCompleted' });
+            }
+          }
+        }
+      );
+
+      // If dsl.committed was never received (chat-only intent), still refresh history
+      if (result.status !== 'waiting_user') {
+        await refreshProjectState(capturedProjectId, capturedSessionId);
       }
     } catch (issue) {
       setError(getErrorMessage(issue));
@@ -469,6 +503,8 @@ export function useStudioWorkspace() {
     statusText,
     error,
     isRunning,
+    streamingText,
+    isStreaming,
     sessionMode,
     setSessionMode,
     session,

@@ -270,6 +270,40 @@ select {
   to   { opacity: 1; }
 }
 
+/* Streaming bubble */
+.studio-streaming-bubble {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 4px 0 8px;
+}
+
+.studio-streaming-content {
+  background: var(--ant-color-bg-elevated, #fff);
+  border-radius: 12px 12px 12px 2px;
+  padding: 8px 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.6;
+  min-width: 40px;
+  min-height: 36px;
+}
+
+.studio-streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: currentColor;
+  vertical-align: middle;
+  animation: studio-cursor-blink 0.9s step-end infinite;
+}
+
+@keyframes studio-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 .studio-preview-shell:fullscreen,
 .studio-preview-shell:-webkit-full-screen {
   padding: 0;

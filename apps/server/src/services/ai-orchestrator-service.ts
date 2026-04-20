@@ -1,22 +1,31 @@
 import { normalizeDsl } from '@ai3d/shared';
 import type { QuestionRecord } from '@ai3d/shared/types';
-import type { NormalizedDsl } from './ai-providers/shared.js';
 
-interface AmbiguityQuestion {
-  prompt: string;
-  options: string[];
-}
+import type { ChatMessage, NormalizedDsl } from './ai-providers/shared.js';
+import {
+  CHAT_REPLY_PROMPT,
+  CLARIFY_PROMPT,
+  EXECUTE_STEP_PROMPT,
+  INTENT_CLASSIFIER_PROMPT,
+  PLAN_STEPS_PROMPT
+} from './ai-providers/shared.js';
+
+// ─── Types ─────────────────────────────────────────────────────────────────
+
+export type AgentEmit = (event: string, payload: unknown) => void;
 
 interface OrchestratorState {
   projectId: string;
   sessionId: string;
   mode: 'navigator' | 'autopilot';
   userMessage: string;
+  conversationHistory: ChatMessage[];
   currentDsl?: NormalizedDsl;
   draftDsl?: NormalizedDsl;
-  needsDecision?: boolean;
-  question?: AmbiguityQuestion;
+  intent?: 'chat' | 'clarify' | 'generate';
+  steps?: string[];
   haltedForQuestion: boolean;
+  question?: QuestionRecord | { prompt: string; options: string[] };
   updatedProject?: ProjectLike | null;
 }
 
@@ -28,6 +37,7 @@ interface ProjectLike {
 
 interface AiProviderServiceLike {
   generateDsl(input: { prompt?: string; currentDsl?: unknown }): Promise<NormalizedDsl>;
+  streamChat(input: { messages: ChatMessage[]; onToken: (delta: string) => void }): Promise<string>;
 }
 
 interface ProjectServiceLike {
@@ -38,18 +48,28 @@ interface ProjectServiceLike {
 interface AiSessionServiceLike {
   markSessionStatus(sessionId: string, status: string, lastError?: string | null): Promise<void>;
   appendMessage(sessionId: string, role: string, content: unknown): Promise<unknown>;
+  listHistory(
+    projectId: string,
+    sessionId: string,
+    options?: { limit?: number; offset?: number }
+  ): Promise<{ messages: Array<{ role: string; content?: unknown }> }>;
   resolveQuestion(
     sessionId: string,
     questionId: string,
     payload: { actor?: string; selectedOption: string; rationale?: string }
   ): Promise<QuestionRecord>;
   addCheckpoint(sessionId: string, nodeName: string, graphState: unknown): Promise<void>;
-  createQuestion(sessionId: string, payload: AmbiguityQuestion): Promise<QuestionRecord>;
+  createQuestion(
+    sessionId: string,
+    payload: { prompt: string; options?: string[] }
+  ): Promise<QuestionRecord>;
 }
 
 interface AiStreamServiceLike {
   emit(sessionId: string, event: string, payload: unknown): string | null;
 }
+
+// ─── Service ───────────────────────────────────────────────────────────────
 
 export class AiOrchestratorService {
   private aiProviderService: AiProviderServiceLike;
@@ -57,7 +77,12 @@ export class AiOrchestratorService {
   private aiSessionService: AiSessionServiceLike;
   private aiStreamService: AiStreamServiceLike;
 
-  constructor({ aiProviderService, projectService, aiSessionService, aiStreamService }: {
+  constructor({
+    aiProviderService,
+    projectService,
+    aiSessionService,
+    aiStreamService
+  }: {
     aiProviderService: AiProviderServiceLike;
     projectService: ProjectServiceLike;
     aiSessionService: AiSessionServiceLike;
@@ -69,51 +94,55 @@ export class AiOrchestratorService {
     this.aiStreamService = aiStreamService;
   }
 
-  async runTurn({ projectId, sessionId, mode, userMessage }: { projectId: string; sessionId: string; mode?: string; userMessage?: string }) {
+  // ── Public entry points ──────────────────────────────────────────────────
+
+  async runTurn({
+    projectId,
+    sessionId,
+    mode,
+    userMessage,
+    emit
+  }: {
+    projectId: string;
+    sessionId: string;
+    mode?: string;
+    userMessage?: string;
+    emit?: AgentEmit;
+  }) {
     const prompt = String(userMessage ?? '').trim();
     if (!prompt) {
       throw new Error('Message is required');
     }
 
+    const agentEmit: AgentEmit =
+      emit ??
+      ((event, payload) => {
+        this.aiStreamService.emit(sessionId, event, payload);
+      });
+
     await this.aiSessionService.markSessionStatus(sessionId, 'active');
     await this.aiSessionService.appendMessage(sessionId, 'user', { text: prompt });
-    this.aiStreamService.emit(sessionId, 'ai.message', {
-      role: 'user',
-      text: prompt
-    });
 
     try {
-      const resultState = await this.runWithLangGraph({
-        projectId,
-        sessionId,
-        mode: normalizeMode(mode),
-        userMessage: prompt,
-        haltedForQuestion: false
-      });
+      const resultState = await this.runGraph(
+        {
+          projectId,
+          sessionId,
+          mode: normalizeMode(mode),
+          userMessage: prompt,
+          conversationHistory: [],
+          haltedForQuestion: false
+        },
+        agentEmit
+      );
 
       if (resultState.haltedForQuestion) {
         await this.aiSessionService.markSessionStatus(sessionId, 'waiting_user');
-        await this.aiSessionService.appendMessage(sessionId, 'assistant', {
-          text: resultState.question.prompt,
-          type: 'question'
-        });
-
-        return {
-          status: 'waiting_user',
-          question: resultState.question,
-          mode: resultState.mode
-        };
+        return { status: 'waiting_user', question: resultState.question, mode: resultState.mode };
       }
 
       await this.aiSessionService.markSessionStatus(sessionId, 'completed');
-      await this.aiSessionService.appendMessage(sessionId, 'assistant', {
-        text: 'DSL updated successfully.',
-        type: 'commit',
-        version: resultState.updatedProject?.currentVersion ?? null
-      });
-      this.aiStreamService.emit(sessionId, 'run.completed', {
-        status: 'completed'
-      });
+      agentEmit('run.completed', { status: 'completed' });
 
       return {
         status: 'completed',
@@ -123,9 +152,7 @@ export class AiOrchestratorService {
     } catch (error) {
       const message = getErrorMessage(error);
       await this.aiSessionService.markSessionStatus(sessionId, 'failed', message);
-      this.aiStreamService.emit(sessionId, 'run.failed', {
-        message
-      });
+      agentEmit('run.failed', { message });
       throw error;
     }
   }
@@ -135,13 +162,15 @@ export class AiOrchestratorService {
     sessionId,
     questionId,
     selectedOption,
-    rationale = ''
+    rationale = '',
+    emit
   }: {
     projectId: string;
     sessionId: string;
     questionId: string;
     selectedOption: string;
     rationale?: string;
+    emit?: AgentEmit;
   }) {
     const resolvedQuestion = await this.aiSessionService.resolveQuestion(sessionId, questionId, {
       actor: 'user',
@@ -149,7 +178,13 @@ export class AiOrchestratorService {
       rationale
     });
 
-    this.aiStreamService.emit(sessionId, 'ai.question.resolved', {
+    const agentEmit: AgentEmit =
+      emit ??
+      ((event, payload) => {
+        this.aiStreamService.emit(sessionId, event, payload);
+      });
+
+    agentEmit('ai.question.resolved', {
       questionId,
       selectedOption: resolvedQuestion.decision
     });
@@ -158,187 +193,333 @@ export class AiOrchestratorService {
       projectId,
       sessionId,
       mode: 'navigator',
-      userMessage: `Apply selected option: ${resolvedQuestion.decision}`
+      userMessage: `User chose: ${resolvedQuestion.decision}`,
+      emit: agentEmit
     });
   }
 
-  async runWithLangGraph(initialState: OrchestratorState): Promise<OrchestratorState> {
+  // ── LangGraph ─────────────────────────────────────────────────────────────
+
+  private async runGraph(
+    initialState: OrchestratorState,
+    emit: AgentEmit
+  ): Promise<OrchestratorState> {
     try {
       const langgraph = await import('@langchain/langgraph');
       const { Annotation, END, START, StateGraph } = langgraph;
+
       const GraphState = Annotation.Root({
         projectId: Annotation(),
         sessionId: Annotation(),
         mode: Annotation(),
         userMessage: Annotation(),
+        conversationHistory: Annotation(),
         currentDsl: Annotation(),
         draftDsl: Annotation(),
-        needsDecision: Annotation(),
-        question: Annotation(),
+        intent: Annotation(),
+        steps: Annotation(),
         haltedForQuestion: Annotation(),
+        question: Annotation(),
         updatedProject: Annotation()
       });
 
       const graph = new StateGraph(GraphState)
-        .addNode('load_context', (state) => this.loadContextNode(state as OrchestratorState))
-        .addNode('draft_dsl', (state) => this.draftDslNode(state as OrchestratorState))
-        .addNode('detect_ambiguity', (state) => this.detectAmbiguityNode(state as OrchestratorState))
-        .addNode('resolve_or_ask', (state) => this.resolveOrAskNode(state as OrchestratorState))
-        .addNode('validate_repair', (state) => this.validateRepairNode(state as OrchestratorState))
-        .addNode('commit_version', (state) => this.commitVersionNode(state as OrchestratorState))
+        .addNode('load_context', (s) => this.nodeLoadContext(s as OrchestratorState, emit))
+        .addNode('classify_intent', (s) => this.nodeClassifyIntent(s as OrchestratorState, emit))
+        .addNode('chat_reply', (s) => this.nodeChatReply(s as OrchestratorState, emit))
+        .addNode('ask_clarify', (s) => this.nodeAskClarify(s as OrchestratorState, emit))
+        .addNode('plan_steps', (s) => this.nodePlanSteps(s as OrchestratorState, emit))
+        .addNode('execute_steps', (s) => this.nodeExecuteSteps(s as OrchestratorState, emit))
+        .addNode('validate_dsl', (s) => this.nodeValidateDsl(s as OrchestratorState))
+        .addNode('commit_version', (s) => this.nodeCommitVersion(s as OrchestratorState, emit))
         .addEdge(START, 'load_context')
-        .addEdge('load_context', 'draft_dsl')
-        .addEdge('draft_dsl', 'detect_ambiguity')
-        .addEdge('detect_ambiguity', 'resolve_or_ask')
-        .addEdge('resolve_or_ask', 'validate_repair')
-        .addEdge('validate_repair', 'commit_version')
+        .addEdge('load_context', 'classify_intent')
+        .addConditionalEdges('classify_intent', ((s: unknown) => routeByIntent(s as OrchestratorState)) as any)
+        .addEdge('chat_reply', END)
+        .addEdge('ask_clarify', END)
+        .addEdge('plan_steps', 'execute_steps')
+        .addEdge('execute_steps', 'validate_dsl')
+        .addEdge('validate_dsl', 'commit_version')
         .addEdge('commit_version', END)
         .compile();
 
-      return (await graph.invoke({
-        ...initialState,
-        haltedForQuestion: false
-      })) as OrchestratorState;
-    } catch (error) {
-      // Fallback keeps service functional if graph runtime setup changes.
-      return this.runSequential(initialState, error);
+      return (await graph.invoke({ ...initialState })) as OrchestratorState;
+    } catch {
+      return this.runSequential(initialState, emit);
     }
   }
 
-  async runSequential(initialState: OrchestratorState, rootError?: unknown): Promise<OrchestratorState> {
-    if (rootError) {
-      this.aiStreamService.emit(initialState.sessionId, 'ai.message', {
-        role: 'system',
-        text: 'LangGraph runtime fallback activated.'
-      });
-    }
+  private async runSequential(
+    state: OrchestratorState,
+    emit: AgentEmit
+  ): Promise<OrchestratorState> {
+    let s = await this.nodeLoadContext(state, emit);
+    s = await this.nodeClassifyIntent(s, emit);
 
-    let state = {
-      ...initialState,
-      haltedForQuestion: false
+    if (s.intent === 'chat') return this.nodeChatReply(s, emit);
+    if (s.intent === 'clarify') return this.nodeAskClarify(s, emit);
+
+    s = await this.nodePlanSteps(s, emit);
+    s = await this.nodeExecuteSteps(s, emit);
+    s = await this.nodeValidateDsl(s);
+    s = await this.nodeCommitVersion(s, emit);
+    return s;
+  }
+
+  // ── Nodes ─────────────────────────────────────────────────────────────────
+
+  private async nodeLoadContext(
+    state: OrchestratorState,
+    emit: AgentEmit
+  ): Promise<OrchestratorState> {
+    emit('agent.thinking', { step: 'load_context', message: '加载项目上下文...' });
+
+    const project = await this.projectService.getProject(state.projectId);
+
+    const historyRecord = await this.aiSessionService.listHistory(
+      state.projectId,
+      state.sessionId,
+      { limit: 10, offset: 0 }
+    );
+
+    const conversationHistory: ChatMessage[] = (historyRecord.messages ?? [])
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: extractMessageText(m.content)
+      }));
+
+    await this.aiSessionService.addCheckpoint(state.sessionId, 'load_context', {
+      mode: state.mode,
+      currentVersion: (project as ProjectLike).currentVersion?.versionNumber ?? null,
+      historyLength: conversationHistory.length
+    });
+
+    return {
+      ...state,
+      mode: normalizeMode(state.mode),
+      currentDsl: (project as ProjectLike).dsl,
+      conversationHistory,
+      updatedProject: null
     };
+  }
 
-    state = await this.loadContextNode(state);
-    state = await this.draftDslNode(state);
-    state = await this.detectAmbiguityNode(state);
-    state = await this.resolveOrAskNode(state);
-    state = await this.validateRepairNode(state);
-    state = await this.commitVersionNode(state);
+  private async nodeClassifyIntent(
+    state: OrchestratorState,
+    emit: AgentEmit
+  ): Promise<OrchestratorState> {
+    emit('agent.thinking', { step: 'classify_intent', message: '分析意图...' });
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: INTENT_CLASSIFIER_PROMPT },
+      ...state.conversationHistory.slice(-6),
+      { role: 'user', content: state.userMessage }
+    ];
+
+    try {
+      const raw = await this.aiProviderService.streamChat({ messages, onToken: () => {} });
+      const parsed = JSON.parse(extractJson(raw)) as { intent?: string };
+      const intent = normalizeIntent(parsed.intent);
+      emit('agent.thinking', { step: 'classify_intent', message: `意图: ${intent}` });
+      return { ...state, intent };
+    } catch {
+      return { ...state, intent: 'generate' };
+    }
+  }
+
+  private async nodeChatReply(
+    state: OrchestratorState,
+    emit: AgentEmit
+  ): Promise<OrchestratorState> {
+    emit('agent.thinking', { step: 'chat_reply', message: '生成回复...' });
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: CHAT_REPLY_PROMPT },
+      ...state.conversationHistory.slice(-8),
+      { role: 'user', content: state.userMessage }
+    ];
+
+    const fullText = await this.aiProviderService.streamChat({
+      messages,
+      onToken: (delta) => emit('agent.token', { delta })
+    });
+
+    emit('agent.token_done', { text: fullText });
+    await this.aiSessionService.appendMessage(state.sessionId, 'assistant', { text: fullText });
 
     return state;
   }
 
-  async loadContextNode(state: OrchestratorState): Promise<OrchestratorState> {
-    const project = await this.projectService.getProject(state.projectId);
-    const nextState = {
-      ...state,
-      mode: normalizeMode(state.mode),
-      currentDsl: project.dsl,
-      updatedProject: null
-    };
+  private async nodeAskClarify(
+    state: OrchestratorState,
+    emit: AgentEmit
+  ): Promise<OrchestratorState> {
+    emit('agent.thinking', { step: 'ask_clarify', message: '生成澄清问题...' });
 
-    await this.aiSessionService.addCheckpoint(state.sessionId, 'load_context', {
-      mode: nextState.mode,
-      currentVersion: project.currentVersion?.versionNumber ?? null
-    });
+    const messages: ChatMessage[] = [
+      { role: 'system', content: CLARIFY_PROMPT },
+      ...state.conversationHistory.slice(-6),
+      { role: 'user', content: state.userMessage }
+    ];
 
-    return nextState;
-  }
+    try {
+      const raw = await this.aiProviderService.streamChat({ messages, onToken: () => {} });
+      const parsed = JSON.parse(extractJson(raw)) as { question?: string; options?: string[] };
+      const questionText = parsed.question ?? '请提供更多细节';
+      const options = parsed.options ?? ['继续', '取消'];
 
-  async draftDslNode(state: OrchestratorState): Promise<OrchestratorState> {
-    const dsl = await this.aiProviderService.generateDsl({
-      prompt: state.userMessage,
-      currentDsl: state.currentDsl
-    });
+      if (state.mode === 'navigator') {
+        const question = await this.aiSessionService.createQuestion(state.sessionId, {
+          prompt: questionText,
+          options
+        });
+        emit('ai.question.required', question);
+        await this.aiSessionService.appendMessage(state.sessionId, 'assistant', {
+          text: questionText,
+          type: 'question'
+        });
+        return { ...state, haltedForQuestion: true, question };
+      }
 
-    this.aiStreamService.emit(state.sessionId, 'ai.dsl.preview', {
-      nodeCount: dsl.nodes.length
-    });
-
-    await this.aiSessionService.addCheckpoint(state.sessionId, 'draft_dsl', {
-      nodeCount: dsl.nodes.length
-    });
-
-    return {
-      ...state,
-      draftDsl: dsl
-    };
-  }
-
-  async detectAmbiguityNode(state: OrchestratorState): Promise<OrchestratorState> {
-    const question = detectQuestionFromPrompt(state.userMessage);
-
-    await this.aiSessionService.addCheckpoint(state.sessionId, 'detect_ambiguity', {
-      needsDecision: Boolean(question)
-    });
-
-    return {
-      ...state,
-      needsDecision: Boolean(question),
-      question
-    };
-  }
-
-  async resolveOrAskNode(state: OrchestratorState): Promise<OrchestratorState> {
-    if (!state.needsDecision || !state.question) {
-      return state;
-    }
-
-    if (state.mode === 'navigator') {
-      const question = await this.aiSessionService.createQuestion(state.sessionId, state.question);
-      this.aiStreamService.emit(state.sessionId, 'ai.question.required', question);
-
-      await this.aiSessionService.addCheckpoint(state.sessionId, 'resolve_or_ask', {
-        haltedForQuestion: true,
-        questionId: question.id
+      // Autopilot: resolve automatically
+      const question = await this.aiSessionService.createQuestion(state.sessionId, {
+        prompt: questionText,
+        options
       });
+      await this.aiSessionService.resolveQuestion(state.sessionId, question.id, {
+        actor: 'model',
+        selectedOption: options[0],
+        rationale: 'Autopilot selected first option.'
+      });
+      emit('ai.question.resolved', { questionId: question.id, selectedOption: options[0] });
 
       return {
         ...state,
-        haltedForQuestion: true,
-        question
+        intent: 'generate',
+        userMessage: `${state.userMessage} (clarified: ${options[0]})`
       };
+    } catch {
+      return { ...state, intent: 'generate' };
     }
-
-    const selectedOption = state.question.options?.[0] ?? 'default';
-    const question = await this.aiSessionService.createQuestion(state.sessionId, state.question);
-    await this.aiSessionService.resolveQuestion(state.sessionId, question.id, {
-      actor: 'model',
-      selectedOption,
-      rationale: 'Autopilot selected default first option.'
-    });
-
-    this.aiStreamService.emit(state.sessionId, 'ai.question.resolved', {
-      questionId: question.id,
-      selectedOption
-    });
-
-    await this.aiSessionService.addCheckpoint(state.sessionId, 'resolve_or_ask', {
-      haltedForQuestion: false,
-      questionId: question.id,
-      selectedOption
-    });
-
-    return state;
   }
 
-  async validateRepairNode(state: OrchestratorState): Promise<OrchestratorState> {
+  private async nodePlanSteps(
+    state: OrchestratorState,
+    emit: AgentEmit
+  ): Promise<OrchestratorState> {
+    emit('agent.thinking', { step: 'plan_steps', message: '规划执行步骤...' });
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: PLAN_STEPS_PROMPT },
+      ...state.conversationHistory.slice(-6),
+      {
+        role: 'user',
+        content: JSON.stringify({
+          request: state.userMessage,
+          currentDslSummary: summarizeDsl(state.currentDsl)
+        })
+      }
+    ];
+
+    let steps: string[] = [];
+    try {
+      const raw = await this.aiProviderService.streamChat({ messages, onToken: () => {} });
+      const parsed = JSON.parse(extractJson(raw)) as { steps?: string[] };
+      steps =
+        Array.isArray(parsed.steps) && parsed.steps.length > 0
+          ? parsed.steps.slice(0, 5)
+          : [state.userMessage];
+    } catch {
+      steps = [state.userMessage];
+    }
+
+    emit('agent.plan', { steps });
+
+    return { ...state, steps };
+  }
+
+  private async nodeExecuteSteps(
+    state: OrchestratorState,
+    emit: AgentEmit
+  ): Promise<OrchestratorState> {
+    const steps = state.steps ?? [state.userMessage];
+    let workingDsl = state.currentDsl;
+
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      emit('agent.step_start', {
+        index: i,
+        total: steps.length,
+        description: step
+      });
+
+      const messages: ChatMessage[] = [
+        { role: 'system', content: EXECUTE_STEP_PROMPT },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            step,
+            currentDsl: workingDsl,
+            originalRequest: state.userMessage
+          })
+        }
+      ];
+
+      try {
+        const rawDsl = await this.aiProviderService.streamChat({
+          messages,
+          onToken: (delta) => emit('agent.token', { delta })
+        });
+        emit('agent.token_done', { text: rawDsl });
+
+        const parsed = JSON.parse(extractJson(rawDsl));
+        workingDsl = normalizeDsl(parsed) as NormalizedDsl;
+
+        // For multi-step: save partial and signal frontend after each intermediate step
+        if (i < steps.length - 1) {
+          const partialProject = await this.projectService.saveDsl(state.projectId, workingDsl, {
+            source: 'ai-partial'
+          });
+          emit('dsl.partial', {
+            projectId: state.projectId,
+            stepIndex: i,
+            totalSteps: steps.length,
+            versionNumber:
+              (partialProject as ProjectLike).currentVersion?.versionNumber ?? null
+          });
+        }
+      } catch {
+        emit('agent.thinking', {
+          step: `execute_step_${i + 1}`,
+          message: `步骤 ${i + 1} 解析失败，跳过`
+        });
+      }
+    }
+
+    await this.aiSessionService.addCheckpoint(state.sessionId, 'execute_steps', {
+      stepsCompleted: steps.length
+    });
+
+    return { ...state, draftDsl: workingDsl };
+  }
+
+  private async nodeValidateDsl(state: OrchestratorState): Promise<OrchestratorState> {
     if (state.haltedForQuestion) {
       return state;
     }
 
     const normalized = normalizeDsl(state.draftDsl ?? state.currentDsl);
-    await this.aiSessionService.addCheckpoint(state.sessionId, 'validate_repair', {
+    await this.aiSessionService.addCheckpoint(state.sessionId, 'validate_dsl', {
       nodeCount: normalized.nodes.length
     });
 
-    return {
-      ...state,
-      draftDsl: normalized as NormalizedDsl
-    };
+    return { ...state, draftDsl: normalized as NormalizedDsl };
   }
 
-  async commitVersionNode(state: OrchestratorState): Promise<OrchestratorState> {
+  private async nodeCommitVersion(
+    state: OrchestratorState,
+    emit: AgentEmit
+  ): Promise<OrchestratorState> {
     if (state.haltedForQuestion) {
       return state;
     }
@@ -347,19 +528,35 @@ export class AiOrchestratorService {
       source: state.mode === 'autopilot' ? 'ai-autopilot' : 'ai-navigator'
     });
 
-    this.aiStreamService.emit(state.sessionId, 'ai.dsl.committed', {
-      version: updatedProject.currentVersion
+    const versionNumber =
+      (updatedProject as ProjectLike).currentVersion?.versionNumber ?? null;
+
+    // Broadcast dsl.committed to all subscribers (other browser tabs)
+    this.aiStreamService.emit(state.sessionId, 'dsl.committed', {
+      projectId: state.projectId,
+      versionNumber
+    });
+
+    await this.aiSessionService.appendMessage(state.sessionId, 'assistant', {
+      text: 'DSL updated successfully.',
+      type: 'commit',
+      version: (updatedProject as ProjectLike).currentVersion ?? null
     });
 
     await this.aiSessionService.addCheckpoint(state.sessionId, 'commit_version', {
-      committedVersion: updatedProject.currentVersion?.versionNumber ?? null
+      committedVersion: versionNumber
     });
 
-    return {
-      ...state,
-      updatedProject
-    };
+    return { ...state, updatedProject: updatedProject as ProjectLike };
   }
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+function routeByIntent(state: OrchestratorState): string {
+  if (state.intent === 'chat') return 'chat_reply';
+  if (state.intent === 'clarify') return 'ask_clarify';
+  return 'plan_steps';
 }
 
 function normalizeMode(mode: string | undefined): 'navigator' | 'autopilot' {
@@ -368,25 +565,32 @@ function normalizeMode(mode: string | undefined): 'navigator' | 'autopilot' {
     : 'navigator';
 }
 
-function detectQuestionFromPrompt(prompt: string | undefined): AmbiguityQuestion | null {
-  const text = String(prompt ?? '').toLowerCase();
+function normalizeIntent(intent: string | undefined): 'chat' | 'clarify' | 'generate' {
+  const v = String(intent ?? '').trim().toLowerCase();
+  if (v === 'chat') return 'chat';
+  if (v === 'clarify') return 'clarify';
+  return 'generate';
+}
 
-  if (!text) {
-    return null;
+function extractJson(raw: string): string {
+  const match = raw.match(/\{[\s\S]*\}/);
+  return match ? match[0] : raw;
+}
+
+function summarizeDsl(dsl: NormalizedDsl | undefined): string {
+  if (!dsl) return 'empty scene';
+  const nodeCount = dsl.nodes?.length ?? 0;
+  const kinds = [...new Set((dsl.nodes ?? []).map((n) => n.kind))].join(', ');
+  return `${nodeCount} nodes (${kinds || 'none'})`;
+}
+
+function extractMessageText(content: unknown): string {
+  if (!content) return '';
+  if (typeof content === 'string') return content;
+  if (typeof content === 'object' && content !== null && 'text' in content) {
+    return String((content as { text: unknown }).text ?? '');
   }
-
-  const hasChoiceKeyword = /( or | choose | style | material | color |尺寸|材质|风格|还是|或者)/.test(
-    text
-  );
-
-  if (!hasChoiceKeyword) {
-    return null;
-  }
-
-  return {
-    prompt: 'I found ambiguous choices. Which option should be prioritized? ',
-    options: ['visual style first', 'accuracy first', 'balanced']
-  };
+  return JSON.stringify(content);
 }
 
 function getErrorMessage(error: unknown) {

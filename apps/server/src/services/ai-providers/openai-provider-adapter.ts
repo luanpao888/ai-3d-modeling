@@ -2,7 +2,7 @@ import { normalizeDsl } from '@ai3d/shared';
 import type OpenAI from 'openai';
 
 import { extractJson, SYSTEM_PROMPT } from './shared.js';
-import type { GenerateDslInput, NormalizedDsl, ProviderAdapter } from './shared.js';
+import type { GenerateDslInput, NormalizedDsl, ProviderAdapter, StreamChatInput } from './shared.js';
 
 export class OpenAIProviderAdapter implements ProviderAdapter {
   private apiKey?: string;
@@ -42,6 +42,25 @@ export class OpenAIProviderAdapter implements ProviderAdapter {
 
     const content = completion.choices?.[0]?.message?.content ?? '{}';
     return normalizeDsl(extractJson(content));
+  }
+
+  async streamChat({ messages, onToken }: StreamChatInput): Promise<string> {
+    const client = await this.getClient();
+    const stream = await client.chat.completions.create({
+      model: this.model,
+      stream: true,
+      messages: messages as OpenAI.Chat.ChatCompletionMessageParam[]
+    });
+
+    let full = '';
+    for await (const chunk of stream) {
+      const delta = chunk.choices?.[0]?.delta?.content ?? '';
+      if (delta) {
+        full += delta;
+        onToken(delta);
+      }
+    }
+    return full;
   }
 
   async getClient(): Promise<OpenAI> {

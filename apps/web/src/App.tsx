@@ -69,6 +69,8 @@ function StudioView({
           setPrompt={workspace.setPrompt}
           senderResetKey={workspace.senderResetKey}
           isRunning={workspace.isRunning}
+          streamingText={workspace.streamingText}
+          isStreaming={workspace.isStreaming}
           history={workspace.history}
           hasMoreHistory={workspace.hasMoreHistory}
           isLoadingOlderHistory={workspace.isLoadingOlderHistory}

@@ -74,6 +74,14 @@ interface PaginationOptions {
   offset?: number;
 }
 
+export interface MessageStreamCallbacks {
+  onToken?: (delta: string) => void;
+  onThinking?: (step: string, message: string) => void;
+  onDone?: (status: string) => void;
+  onDslCommitted?: (payload: { projectId: string; versionNumber?: number | null }) => void;
+  onDslPartial?: (payload: { projectId: string; stepIndex: number; totalSteps: number; versionNumber?: number | null }) => void;
+}
+
 export interface ApiClient {
   listProjects: () => Promise<ProjectRecord[]>;
   getProject: (projectId: string) => Promise<ProjectRecord>;
@@ -89,7 +97,12 @@ export interface ApiClient {
     sessionId: string,
     options?: PaginationOptions
   ) => Promise<SessionHistoryRecord>;
-  sendSessionMessage: (projectId: string, sessionId: string, message: string) => Promise<{ status: string; [key: string]: unknown }>;
+  sendSessionMessage: (
+    projectId: string,
+    sessionId: string,
+    message: string,
+    callbacks?: MessageStreamCallbacks
+  ) => Promise<{ status: string }>;
   resolveQuestion: (
     projectId: string,
     sessionId: string,
@@ -191,11 +204,66 @@ export function createHttpClient(baseUrl = DEFAULT_BASE_URL): ApiClient {
 
       return request<SessionHistoryRecord>(path);
     },
-    sendSessionMessage(projectId, sessionId, message) {
-      return request<{ status: string; [key: string]: unknown }>(`/projects/${projectId}/ai/sessions/${sessionId}/messages`, {
+    async sendSessionMessage(projectId, sessionId, message, callbacks = {}) {
+      const response = await fetch(`${baseUrl}/projects/${projectId}/ai/sessions/${sessionId}/messages`, {
         method: 'POST',
-        body: { message }
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ message })
       });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({} as { message?: string }));
+        throw new Error(err.message ?? `Request failed with status ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        return { status: 'completed' };
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalStatus = 'completed';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE packets are separated by \n\n
+        const packets = buffer.split('\n\n');
+        buffer = packets.pop() ?? '';
+
+        for (const packet of packets) {
+          if (!packet.trim()) continue;
+          let event = 'message';
+          let data = '';
+          for (const line of packet.split('\n')) {
+            if (line.startsWith('event: ')) event = line.slice(7).trim();
+            else if (line.startsWith('data: ')) data = line.slice(6).trim();
+          }
+          if (!data) continue;
+          let payload: Record<string, unknown>;
+          try { payload = JSON.parse(data); } catch { continue; }
+
+          if (event === 'agent.token') {
+            callbacks.onToken?.(String(payload.delta ?? ''));
+          } else if (event === 'agent.thinking') {
+            callbacks.onThinking?.(String(payload.step ?? ''), String(payload.message ?? ''));
+          } else if (event === 'dsl.committed') {
+            callbacks.onDslCommitted?.(payload as { projectId: string; versionNumber?: number | null });
+          } else if (event === 'dsl.partial') {
+            callbacks.onDslPartial?.(payload as { projectId: string; stepIndex: number; totalSteps: number; versionNumber?: number | null });
+          } else if (event === 'run.completed') {
+            finalStatus = 'completed';
+          } else if (event === 'run.failed') {
+            finalStatus = 'failed';
+          }
+        }
+      }
+
+      callbacks.onDone?.(finalStatus);
+      return { status: finalStatus };
     },
     resolveQuestion(projectId, sessionId, questionId, selectedOption, rationale = '') {
       return request<{ status: string; [key: string]: unknown }>(`/projects/${projectId}/ai/sessions/${sessionId}/questions/${questionId}/decision`, {

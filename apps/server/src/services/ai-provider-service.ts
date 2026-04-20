@@ -9,7 +9,8 @@ import type {
   GenerateDslInput,
   NormalizedDsl,
   ProviderAdapter,
-  ProviderEnv
+  ProviderEnv,
+  StreamChatInput
 } from './ai-providers/shared.js';
 
 interface ProviderDescription {
@@ -54,5 +55,9 @@ export class AIProviderService {
 
     const input: GenerateDslInput = { prompt, currentDsl };
     return this.adapter.generateDsl(input);
+  }
+
+  async streamChat(input: StreamChatInput): Promise<string> {
+    return this.adapter.streamChat(input);
   }
 }

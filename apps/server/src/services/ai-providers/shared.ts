@@ -17,9 +17,22 @@ export interface GenerateDslInput {
   currentDsl?: unknown;
 }
 
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export type TokenCallback = (delta: string) => void;
+
+export interface StreamChatInput {
+  messages: ChatMessage[];
+  onToken: TokenCallback;
+}
+
 export interface ProviderAdapter {
   describe(): { baseUrl: string | null };
   generateDsl(input: GenerateDslInput): Promise<NormalizedDsl>;
+  streamChat(input: StreamChatInput): Promise<string>;
 }
 
 export const SYSTEM_PROMPT = `You generate JSON only for a local-first 3D modeling DSL.
@@ -30,6 +43,32 @@ Rules:
 - Use assetId references for reusable models.
 - Prefer modular primitives and normalized assets.
 - Return valid JSON matching the DSL schema.`;
+
+export const INTENT_CLASSIFIER_PROMPT = `You are an intent classifier for a 3D modeling assistant.
+Given a conversation history and the latest user message, classify the intent as exactly one of:
+  - "chat"     : The user is exploring ideas, discussing requirements, or asking questions. No DSL changes needed.
+  - "clarify"  : The user's request is ambiguous or incomplete. You should ask a clarifying question before proceeding.
+  - "generate" : The user clearly wants to create or modify the 3D scene DSL.
+
+Reply with ONLY a JSON object: { "intent": "<chat|clarify|generate>", "reason": "<one sentence>" }`;
+
+export const CHAT_REPLY_PROMPT = `You are a helpful 3D scene design assistant. You help users plan and discuss their 3D scene ideas.
+You do NOT generate DSL JSON in this mode. Just have a natural conversation.
+Keep responses concise and focused on 3D design topics.`;
+
+export const CLARIFY_PROMPT = `You are a 3D scene design assistant. The user's request has some ambiguity.
+Ask ONE clear clarifying question with 2-4 short options.
+Reply with JSON only: { "question": "<question text>", "options": ["option1", "option2"] }`;
+
+export const PLAN_STEPS_PROMPT = `You are a 3D scene planner. Given the user's request and current DSL, break the task into 2-5 ordered implementation steps.
+Each step should be a focused DSL modification (e.g. "Add a floor plane", "Place a blue cube at origin").
+Reply with JSON only: { "steps": ["step 1 description", "step 2 description"] }`;
+
+export const EXECUTE_STEP_PROMPT = `You are a 3D scene DSL generator. Given the current DSL and a specific step to execute, output the COMPLETE updated DSL JSON.
+Rules:
+- Units must always be meter. Up-axis must always be Y.
+- Output structure, not detailed mesh geometry.
+- Return ONLY valid JSON matching the DSL schema, no extra text.`;
 
 export function buildMockDsl({ prompt, currentDsl }: GenerateDslInput): NormalizedDsl {
   const baseDsl = currentDsl ? normalizeDsl(currentDsl) : createDefaultDsl('AI Generated Scene');

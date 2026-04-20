@@ -46,6 +46,8 @@ interface Props {
   setPrompt: (value: string) => void;
   senderResetKey: number;
   isRunning: boolean;
+  streamingText?: string;
+  isStreaming?: boolean;
   history: HistoryState;
   hasMoreHistory: boolean;
   isLoadingOlderHistory: boolean;
@@ -62,6 +64,8 @@ export function StudioChatPanel({
   setPrompt,
   senderResetKey,
   isRunning,
+  streamingText = '',
+  isStreaming = false,
   history,
   hasMoreHistory,
   isLoadingOlderHistory,
@@ -187,6 +191,15 @@ export function StudioChatPanel({
     }
   }, [mergedTimelineItems.length, isLoadingOlderHistory]);
 
+  // Scroll to bottom while streaming tokens arrive
+  useEffect(() => {
+    if (!isStreaming) return;
+    const container = timelineScrollRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [isStreaming, streamingText]);
+
   function handleTimelineScroll(event: React.UIEvent<HTMLDivElement>) {
     setIsAtTop(event.currentTarget.scrollTop <= 24);
 
@@ -234,6 +247,14 @@ export function StudioChatPanel({
           {canLoadMore ? <Text type="secondary" className="studio-chat-load-more">{isLoadingOlderHistory ? t('labels.loadingMore') : t('labels.pullToLoadPrevious')}</Text> : null}
           {!canLoadMore && isAtTop ? <Text type="secondary" className="studio-chat-load-more">{t('labels.noMoreMessagesTop')}</Text> : null}
           <Bubble.List className="studio-bubble-list" items={mergedTimelineItems as any} role={roleConfig as any} />
+          {isStreaming && (
+            <div className="studio-streaming-bubble">
+              <div className="studio-bubble-avatar studio-bubble-avatar--ai"><RobotOutlined /></div>
+              <div className="studio-streaming-content">
+                {streamingText || <span className="studio-streaming-cursor" />}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="studio-empty-chat">

@@ -54,6 +54,7 @@ export interface AiStreamServiceContract {
 export interface AiProviderServiceContract {
   describe(): unknown;
   generateDsl(input: { prompt?: string; currentDsl?: unknown }): Promise<unknown>;
+  streamChat(input: { messages: unknown[]; onToken: (delta: string) => void }): Promise<string>;
 }
 
 export interface AiOrchestratorServiceContract {
@@ -62,6 +63,7 @@ export interface AiOrchestratorServiceContract {
     sessionId: string;
     mode?: string;
     userMessage?: string;
+    emit?: (event: string, payload: unknown) => void;
   }): Promise<unknown>;
   continueFromDecision(input: {
     projectId: string;
@@ -69,6 +71,7 @@ export interface AiOrchestratorServiceContract {
     questionId: string;
     selectedOption: string;
     rationale?: string;
+    emit?: (event: string, payload: unknown) => void;
   }): Promise<unknown>;
 }
 
