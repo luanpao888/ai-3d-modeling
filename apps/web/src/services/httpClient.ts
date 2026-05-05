@@ -1,4 +1,6 @@
-const DEFAULT_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { fetchEventSource } from '@microsoft/fetch-event-source';
+
+const DEFAULT_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : 'http://localhost:3000');
 
 export interface ProjectRecord {
   id: string;
@@ -205,60 +207,63 @@ export function createHttpClient(baseUrl = DEFAULT_BASE_URL): ApiClient {
       return request<SessionHistoryRecord>(path);
     },
     async sendSessionMessage(projectId, sessionId, message, callbacks = {}) {
-      const response = await fetch(`${baseUrl}/projects/${projectId}/ai/sessions/${sessionId}/messages`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message })
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({} as { message?: string }));
-        throw new Error(err.message ?? `Request failed with status ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        return { status: 'completed' };
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
+      const controller = new AbortController();
       let finalStatus = 'completed';
+      let receivedTerminalEvent = false;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+      try {
+        await fetchEventSource(`${baseUrl}/projects/${projectId}/ai/sessions/${sessionId}/messages`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ message }),
+          signal: controller.signal,
+          async onopen(response) {
+            if (response.ok) {
+              return;
+            }
 
-        // SSE packets are separated by \n\n
-        const packets = buffer.split('\n\n');
-        buffer = packets.pop() ?? '';
+            const err = await response.json().catch(() => ({} as { message?: string }));
+            throw new Error(err.message ?? `Request failed with status ${response.status}`);
+          },
+          onmessage(event) {
+            if (!event.data) {
+              return;
+            }
 
-        for (const packet of packets) {
-          if (!packet.trim()) continue;
-          let event = 'message';
-          let data = '';
-          for (const line of packet.split('\n')) {
-            if (line.startsWith('event: ')) event = line.slice(7).trim();
-            else if (line.startsWith('data: ')) data = line.slice(6).trim();
+            let payload: Record<string, unknown>;
+            try {
+              payload = JSON.parse(event.data);
+            } catch {
+              return;
+            }
+
+            const eventName = event.event || 'message';
+
+            if (eventName === 'agent.token') {
+              callbacks.onToken?.(String(payload.delta ?? ''));
+            } else if (eventName === 'agent.thinking') {
+              callbacks.onThinking?.(String(payload.step ?? ''), String(payload.message ?? ''));
+            } else if (eventName === 'dsl.committed') {
+              callbacks.onDslCommitted?.(payload as { projectId: string; versionNumber?: number | null });
+            } else if (eventName === 'dsl.partial') {
+              callbacks.onDslPartial?.(payload as { projectId: string; stepIndex: number; totalSteps: number; versionNumber?: number | null });
+            } else if (eventName === 'run.completed') {
+              finalStatus = String(payload.status ?? 'completed');
+              receivedTerminalEvent = true;
+              controller.abort();
+            } else if (eventName === 'run.failed') {
+              finalStatus = 'failed';
+              receivedTerminalEvent = true;
+              controller.abort();
+            }
+          },
+          onerror(error) {
+            throw error;
           }
-          if (!data) continue;
-          let payload: Record<string, unknown>;
-          try { payload = JSON.parse(data); } catch { continue; }
-
-          if (event === 'agent.token') {
-            callbacks.onToken?.(String(payload.delta ?? ''));
-          } else if (event === 'agent.thinking') {
-            callbacks.onThinking?.(String(payload.step ?? ''), String(payload.message ?? ''));
-          } else if (event === 'dsl.committed') {
-            callbacks.onDslCommitted?.(payload as { projectId: string; versionNumber?: number | null });
-          } else if (event === 'dsl.partial') {
-            callbacks.onDslPartial?.(payload as { projectId: string; stepIndex: number; totalSteps: number; versionNumber?: number | null });
-          } else if (event === 'run.completed') {
-            finalStatus = 'completed';
-          } else if (event === 'run.failed') {
-            finalStatus = 'failed';
-          }
+        });
+      } catch (error) {
+        if (!receivedTerminalEvent) {
+          throw error;
         }
       }
 

@@ -411,8 +411,7 @@ export function useStudioWorkspace() {
       'ai.dsl.preview',
       'ai.dsl.committed',
       'run.completed',
-      'run.failed',
-      'heartbeat'
+      'run.failed'
     ]) {
       eventSource.addEventListener(eventName, (event) => {
         const payload = safeParseDsl((event as MessageEvent<string>).data) ?? {};
