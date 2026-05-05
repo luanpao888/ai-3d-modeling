@@ -1,6 +1,6 @@
 import { Card, Layout, Typography } from 'antd';
-import { useEffect } from 'react';
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import 'react18-json-view/src/style.css';
 
 import { AppNav } from './components/AppNav';
@@ -84,17 +84,58 @@ function StudioView({
   );
 }
 
+function StudioRoute({
+  workspace,
+  onNavigateToProjects,
+}: {
+  workspace: ReturnType<typeof useStudioWorkspace>;
+  onNavigateToProjects: () => void;
+}) {
+  const { projectId } = useParams<{ projectId: string }>();
+  const openingProjectRef = useRef<string | null>(null);
+  const activeProjectId = workspace.activeProject?.id;
+  const openProject = workspace.handleOpenProject;
+
+  useEffect(() => {
+    if (!projectId) {
+      return;
+    }
+
+    if (activeProjectId === projectId) {
+      openingProjectRef.current = null;
+      return;
+    }
+
+    if (openingProjectRef.current === projectId) {
+      return;
+    }
+
+    openingProjectRef.current = projectId;
+    void openProject(projectId).finally(() => {
+      openingProjectRef.current = null;
+    });
+  }, [projectId, activeProjectId, openProject]);
+
+  return <StudioView workspace={workspace} onNavigateToProjects={onNavigateToProjects} />;
+}
+
 export default function App() {
   const workspace = useStudioWorkspace();
   const navigate = useNavigate();
 
   function handleOpenProject(projectId: string) {
-    workspace.handleOpenProject(projectId);
-    navigate('/studio');
+    void workspace.handleOpenProject(projectId);
+    navigate(`/studio/${projectId}`);
   }
 
   async function handleCreateProject(data: { name: string; description?: string; units: string; upAxis: string }) {
     await workspace.handleCreateProject(data as Record<string, unknown>);
+    const targetProjectId = workspace.activeProject?.id;
+    if (targetProjectId) {
+      navigate(`/studio/${targetProjectId}`);
+      return;
+    }
+
     navigate('/studio');
   }
 
@@ -135,7 +176,16 @@ export default function App() {
             <Route
               path="/studio"
               element={
-                <StudioView workspace={workspace} onNavigateToProjects={() => navigate('/projects')} />
+                workspace.activeProject
+                  ? <Navigate to={`/studio/${workspace.activeProject.id}`} replace />
+                  : <Navigate to="/projects" replace />
+              }
+            />
+
+            <Route
+              path="/studio/:projectId"
+              element={
+                <StudioRoute workspace={workspace} onNavigateToProjects={() => navigate('/projects')} />
               }
             />
           </Routes>
