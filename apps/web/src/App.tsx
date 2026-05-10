@@ -64,6 +64,8 @@ function StudioView({
         />
         <StudioChatPanel
           t={workspace.t}
+          locale={workspace.locale}
+          statusText={workspace.statusText}
           session={workspace.session}
           prompt={workspace.prompt}
           setPrompt={workspace.setPrompt}
@@ -74,7 +76,6 @@ function StudioView({
           history={workspace.history}
           hasMoreHistory={workspace.hasMoreHistory}
           isLoadingOlderHistory={workspace.isLoadingOlderHistory}
-          events={workspace.events}
           onSend={workspace.handleGenerateDsl}
           onResolveQuestion={workspace.handleResolveQuestion}
           onLoadOlderHistory={workspace.handleLoadOlderHistory}

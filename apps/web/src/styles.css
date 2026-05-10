@@ -211,6 +211,11 @@ select {
   letter-spacing: -0.96px !important;
 }
 
+.studio-chat-status {
+  display: block;
+  margin-top: 6px;
+}
+
 .studio-toolbar .ant-card-body {
   padding: 16px;
 }
@@ -400,6 +405,16 @@ select {
 .studio-system-block {
   display: grid;
   gap: 10px;
+}
+
+.studio-message-block {
+  display: grid;
+  gap: 6px;
+}
+
+.studio-message-time {
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .studio-option-button {

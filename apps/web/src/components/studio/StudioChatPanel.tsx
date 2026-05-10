@@ -1,7 +1,13 @@
 import { AppstoreOutlined, LoadingOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
 import { Bubble, Sender } from '@ant-design/x';
 import { Button, Card, Empty, Flex, Space, Tag, Typography } from 'antd';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
 import { useEffect, useMemo, useRef, useState } from 'react';
+
+import 'dayjs/locale/zh-cn';
+
+dayjs.extend(relativeTime);
 
 const { Text, Title } = Typography;
 
@@ -33,14 +39,10 @@ interface HistoryState {
   decisions?: DecisionItem[];
 }
 
-interface EventItem {
-  id: string;
-  event: string;
-  payload: unknown;
-}
-
 interface Props {
   t: (key: string) => string;
+  locale: string;
+  statusText?: string;
   session: { id: string } | null;
   prompt: string;
   setPrompt: (value: string) => void;
@@ -51,7 +53,6 @@ interface Props {
   history: HistoryState;
   hasMoreHistory: boolean;
   isLoadingOlderHistory: boolean;
-  events: EventItem[];
   onSend: (value?: string) => void;
   onResolveQuestion: (questionId: string, option: string) => void;
   onLoadOlderHistory: () => void;
@@ -59,6 +60,8 @@ interface Props {
 
 export function StudioChatPanel({
   t,
+  locale,
+  statusText,
   session,
   prompt,
   setPrompt,
@@ -69,7 +72,6 @@ export function StudioChatPanel({
   history,
   hasMoreHistory,
   isLoadingOlderHistory,
-  events,
   onSend,
   onResolveQuestion,
   onLoadOlderHistory
@@ -82,15 +84,22 @@ export function StudioChatPanel({
     const records: Array<{ key: string; role: 'user' | 'ai' | 'system'; order: number; content: React.ReactNode }> = [];
 
     for (const message of history.messages ?? []) {
+      const timestamp = formatCompactTime(message.createdAt, locale);
       records.push({
         key: `message-${message.id}`,
         role: message.role === 'assistant' ? 'ai' : 'user',
         order: Date.parse(message.createdAt || '') || 0,
-        content: getMessageContent(message.content)
+        content: (
+          <div className="studio-message-block">
+            <div>{getMessageContent(message.content)}</div>
+            {timestamp ? <Text type="secondary" className="studio-message-time">{timestamp}</Text> : null}
+          </div>
+        )
       });
     }
 
     for (const question of history.questions ?? []) {
+      const timestamp = formatCompactTime(question.createdAt, locale);
       records.push({
         key: `question-${question.id}`,
         role: 'ai',
@@ -114,12 +123,14 @@ export function StudioChatPanel({
             <Text type="secondary">
               {question.status === 'pending' ? t('status.waitingUser') : t('labels.resolved')}
             </Text>
+            {timestamp ? <Text type="secondary" className="studio-message-time">{timestamp}</Text> : null}
           </div>
         )
       });
     }
 
     for (const decision of history.decisions ?? []) {
+      const timestamp = formatCompactTime(decision.createdAt, locale);
       records.push({
         key: `decision-${decision.id}`,
         role: 'system',
@@ -129,22 +140,7 @@ export function StudioChatPanel({
             <Text strong>{t('labels.decision')}</Text>
             <Text>{decision.selectedOption}</Text>
             {decision.rationale ? <Text type="secondary">{decision.rationale}</Text> : null}
-          </div>
-        )
-      });
-    }
-
-    const eventBase = Date.now();
-    for (let index = events.length - 1; index >= 0; index -= 1) {
-      const event = events[index];
-      records.push({
-        key: event.id,
-        role: 'system',
-        order: eventBase + index,
-        content: (
-          <div className="studio-system-block">
-            <Text strong>{event.event}</Text>
-            <pre className="studio-event-pre">{JSON.stringify(event.payload, null, 2)}</pre>
+            {timestamp ? <Text type="secondary" className="studio-message-time">{timestamp}</Text> : null}
           </div>
         )
       });
@@ -152,7 +148,7 @@ export function StudioChatPanel({
 
     records.sort((left, right) => left.order - right.order);
     return records;
-  }, [events, history.decisions, history.messages, history.questions, isRunning, onResolveQuestion, t]);
+  }, [history.decisions, history.messages, history.questions, isRunning, locale, onResolveQuestion, t]);
 
   const roleConfig = useMemo(
     () => ({
@@ -238,6 +234,7 @@ export function StudioChatPanel({
           <Title level={4} className="studio-chat-title">
             {session ? t('labels.sessionHistory') : t('actions.createSession')}
           </Title>
+          {statusText ? <Text type="secondary" className="studio-chat-status">{statusText}</Text> : null}
         </div>
         <Tag className="studio-pill-tag">{mergedTimelineItems.length}</Tag>
       </Flex>
@@ -295,4 +292,41 @@ function getMessageContent(content: MessageItem['content']): string {
   }
 
   return JSON.stringify(content, null, 2);
+}
+
+function formatCompactTime(isoTime: string | undefined, locale: string): string | null {
+  if (!isoTime) {
+    return null;
+  }
+
+  const time = dayjs(isoTime);
+  if (!time.isValid()) {
+    return null;
+  }
+
+  const now = dayjs();
+  const diffInMinutes = Math.abs(now.diff(time, 'minute'));
+  const isZh = locale.toLowerCase().startsWith('zh');
+  const dayjsLocale = isZh ? 'zh-cn' : 'en';
+  const absolute = time.locale(dayjsLocale).format('HH:mm');
+
+  if (diffInMinutes < 1) {
+    return isZh ? `刚刚 · ${absolute}` : `now · ${absolute}`;
+  }
+
+  if (diffInMinutes < 60) {
+    return isZh ? `${diffInMinutes}分前 · ${absolute}` : `${diffInMinutes}m ago · ${absolute}`;
+  }
+
+  const diffInHours = Math.abs(now.diff(time, 'hour'));
+  if (diffInHours < 24) {
+    return isZh ? `${diffInHours}小时前 · ${absolute}` : `${diffInHours}h ago · ${absolute}`;
+  }
+
+  const diffInDays = Math.abs(now.diff(time, 'day'));
+  if (diffInDays < 30) {
+    return isZh ? `${diffInDays}天前 · ${absolute}` : `${diffInDays}d ago · ${absolute}`;
+  }
+
+  return time.locale(dayjsLocale).format(isZh ? 'MM-DD HH:mm' : 'MMM D HH:mm');
 }

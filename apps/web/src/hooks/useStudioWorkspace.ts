@@ -49,7 +49,6 @@ export function useStudioWorkspace() {
   const [historyOffset, setHistoryOffset] = useState(0);
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [isLoadingOlderHistory, setIsLoadingOlderHistory] = useState(false);
-  const [events, setEvents] = useState<Array<{ id: string; event: string; payload: unknown }>>([]);
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [status, setStatus] = useState<StatusState>({ key: 'status.bootingWorkspace' });
   const [error, setError] = useState('');
@@ -146,7 +145,6 @@ export function useStudioWorkspace() {
     openProjectData(project, projectVersions, nextSession, nextHistory);
     setHistoryOffset(nextHistory.messages?.length ?? 0);
     setHasMoreHistory(Boolean(nextHistory.hasMoreMessages));
-    setEvents([]);
     connectEventStream(projectId, nextSession.id);
   }
 
@@ -327,7 +325,6 @@ export function useStudioWorkspace() {
       });
       setHistoryOffset(nextHistory.messages?.length ?? 0);
       setHasMoreHistory(Boolean(nextHistory.hasMoreMessages));
-      setEvents([]);
       connectEventStream(activeProject.id, nextSession.id);
       setStatus({ key: 'status.sessionReady', values: { mode: t(`modes.${nextSession.mode}`) } });
     } catch (issue) {
@@ -403,28 +400,19 @@ export function useStudioWorkspace() {
       setStatus({ key: 'status.streamDisconnected' });
     };
 
-    for (const eventName of [
-      'session.started',
-      'ai.message',
-      'ai.question.required',
-      'ai.question.resolved',
-      'ai.dsl.preview',
-      'ai.dsl.committed',
-      'run.completed',
-      'run.failed'
-    ]) {
-      eventSource.addEventListener(eventName, (event) => {
-        const payload = safeParseDsl((event as MessageEvent<string>).data) ?? {};
-        setEvents((current) => [
-          {
-            id: `${eventName}-${(event as MessageEvent<string>).lastEventId || Date.now()}`,
-            event: eventName,
-            payload
-          },
-          ...current
-        ].slice(0, 48));
-      });
-    }
+    eventSource.addEventListener('run.completed', () => {
+      setStatus({ key: 'status.sessionCompleted' });
+      setError('');
+    });
+
+    eventSource.addEventListener('run.failed', (event) => {
+      const payload = safeParseDsl((event as MessageEvent<string>).data) ?? {};
+      setStatus({ key: 'status.sessionFailed' });
+      setError(getSseRunFailedMessage(payload) ?? t('status.sessionFailed'));
+      setIsRunning(false);
+      setIsStreaming(false);
+      setStreamingText('');
+    });
   }
 
   async function handleDownloadZip() {
@@ -497,7 +485,6 @@ export function useStudioWorkspace() {
     history,
     hasMoreHistory,
     isLoadingOlderHistory,
-    events,
     assets,
     statusText,
     error,
@@ -603,4 +590,16 @@ function triggerDownload(blob: Blob, fileName: string) {
 
 function getErrorMessage(issue: unknown) {
   return issue instanceof Error ? issue.message : String(issue);
+}
+
+function getSseRunFailedMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  if ('message' in payload && typeof payload.message === 'string' && payload.message.trim()) {
+    return payload.message.trim();
+  }
+
+  return null;
 }
