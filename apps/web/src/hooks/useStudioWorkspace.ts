@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useI18n } from '../i18n/I18nProvider';
-import { exportDslToGlb, mountScenePreview } from '../lib/renderDsl';
+import { exportDslToGlb, mountScenePreview, type SceneController } from '../lib/renderDsl';
 import {
   createApiClient,
   type AssetRecord,
@@ -34,6 +34,7 @@ export function useStudioWorkspace() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const previewRef = useRef<HTMLDivElement | null>(null);
   const previewShellRef = useRef<HTMLDivElement | null>(null);
+  const sceneCtrlRef = useRef<SceneController | null>(null);
 
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [activeProject, setActiveProject] = useState<ProjectRecord | null>(null);
@@ -80,8 +81,9 @@ export function useStudioWorkspace() {
 
   useEffect(() => {
     const parsedDsl = safeParseDsl(dslText) ?? activeProject?.dsl;
-    const cleanup = mountScenePreview(previewRef.current, parsedDsl, assetIndex);
-    return () => cleanup?.();
+    const ctrl = mountScenePreview(previewRef.current, parsedDsl, assetIndex);
+    sceneCtrlRef.current = ctrl;
+    return () => { ctrl.dispose(); sceneCtrlRef.current = null; };
   }, [dslText, activeProject, assetIndex, previewKey]);
 
   useEffect(() => {
@@ -413,6 +415,29 @@ export function useStudioWorkspace() {
       setIsStreaming(false);
       setStreamingText('');
     });
+
+    // Agent viewport / highlight tool feedback
+    eventSource.addEventListener('scene.highlight', (event) => {
+      const payload = safeParseDsl((event as MessageEvent<string>).data) ?? {};
+      const nodeIds = Array.isArray((payload as Record<string, unknown>).nodeIds)
+        ? ((payload as Record<string, unknown>).nodeIds as string[])
+        : [];
+      sceneCtrlRef.current?.highlightNodes(nodeIds);
+    });
+
+    eventSource.addEventListener('viewport.change', (event) => {
+      const payload = safeParseDsl((event as MessageEvent<string>).data) ?? {};
+      const nodeId = (payload as Record<string, unknown>).nodeId as string | undefined;
+      if (nodeId) sceneCtrlRef.current?.focusNode(nodeId);
+    });
+  }
+
+  function handleFocusNode(nodeId: string) {
+    sceneCtrlRef.current?.focusNode(nodeId);
+  }
+
+  function handleHighlightNodes(nodeIds: string[]) {
+    sceneCtrlRef.current?.highlightNodes(nodeIds);
   }
 
   async function handleDownloadZip() {
@@ -468,6 +493,12 @@ export function useStudioWorkspace() {
   }
 
   const statusText = useMemo(() => renderStatus(t, status), [t, status]);
+  const dslNodes = useMemo(() => {
+    const parsed = (safeParseDsl(dslText) ?? activeProject?.dsl) as
+      | { nodes?: unknown[] }
+      | undefined;
+    return Array.isArray(parsed?.nodes) ? parsed.nodes : [];
+  }, [dslText, activeProject]);
   const dslObject = useMemo(
     () => safeParseDsl(dslDraft) ?? safeParseDsl(dslText) ?? activeProject?.dsl ?? {},
     [dslDraft, dslText, activeProject]
@@ -517,6 +548,9 @@ export function useStudioWorkspace() {
     handleDownloadZip,
     handleExportGlb,
     handleToggleFullscreen,
+    handleFocusNode,
+    handleHighlightNodes,
+    dslNodes,
     openDslModal,
     handleSaveDslFromModal,
     remountPreview: () => setPreviewKey((k) => k + 1)

@@ -9,6 +9,7 @@ import {
   INTENT_CLASSIFIER_PROMPT,
   PLAN_STEPS_PROMPT
 } from './ai-providers/shared.js';
+import { AgentToolsService } from './agent-tools-service.js';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ export type AgentEmit = (event: string, payload: unknown) => void;
 interface OrchestratorState {
   projectId: string;
   sessionId: string;
+  baselineVersionId?: string | null;
   mode: 'navigator' | 'autopilot';
   userMessage: string;
   conversationHistory: ChatMessage[];
@@ -48,6 +50,7 @@ interface ProjectServiceLike {
 interface AiSessionServiceLike {
   markSessionStatus(sessionId: string, status: string, lastError?: string | null): Promise<void>;
   appendMessage(sessionId: string, role: string, content: unknown): Promise<unknown>;
+  resolvePendingQuestions(sessionId: string, options?: { decision?: string }): Promise<unknown>;
   listHistory(
     projectId: string,
     sessionId: string,
@@ -69,6 +72,20 @@ interface AiStreamServiceLike {
   emit(sessionId: string, event: string, payload: unknown): string | null;
 }
 
+interface AgentToolsServiceLike {
+  validateStructure(dslInput: unknown): {
+    dsl: NormalizedDsl | null;
+    errors: Array<{ code: string; message: string; nodeId?: string }>;
+  };
+  analyzeGeometry(dslInput: unknown): {
+    nodeCount: number;
+    kindCounts: Record<string, number>;
+    overlaps: Array<{ a: string; b: string }>;
+    worldBounds: unknown;
+  };
+  rollback(projectId: string, versionId: string): Promise<unknown>;
+}
+
 // ─── Service ───────────────────────────────────────────────────────────────
 
 export class AiOrchestratorService {
@@ -76,22 +93,27 @@ export class AiOrchestratorService {
   private projectService: ProjectServiceLike;
   private aiSessionService: AiSessionServiceLike;
   private aiStreamService: AiStreamServiceLike;
+  private agentToolsService: AgentToolsServiceLike;
 
   constructor({
     aiProviderService,
     projectService,
     aiSessionService,
-    aiStreamService
+    aiStreamService,
+    agentToolsService
   }: {
     aiProviderService: AiProviderServiceLike;
     projectService: ProjectServiceLike;
     aiSessionService: AiSessionServiceLike;
     aiStreamService: AiStreamServiceLike;
+    agentToolsService?: AgentToolsServiceLike;
   }) {
     this.aiProviderService = aiProviderService;
     this.projectService = projectService;
     this.aiSessionService = aiSessionService;
     this.aiStreamService = aiStreamService;
+    this.agentToolsService =
+      agentToolsService ?? new AgentToolsService({ projectService: this.projectService as any });
   }
 
   // ── Public entry points ──────────────────────────────────────────────────
@@ -121,6 +143,7 @@ export class AiOrchestratorService {
       });
 
     await this.aiSessionService.markSessionStatus(sessionId, 'active');
+    await this.aiSessionService.resolvePendingQuestions(sessionId, { decision: 'superseded' });
     await this.aiSessionService.appendMessage(sessionId, 'user', { text: prompt });
 
     try {
@@ -211,6 +234,7 @@ export class AiOrchestratorService {
       const GraphState = Annotation.Root({
         projectId: Annotation(),
         sessionId: Annotation(),
+        baselineVersionId: Annotation(),
         mode: Annotation(),
         userMessage: Annotation(),
         conversationHistory: Annotation(),
@@ -230,7 +254,7 @@ export class AiOrchestratorService {
         .addNode('ask_clarify', (s) => this.nodeAskClarify(s as OrchestratorState, emit))
         .addNode('plan_steps', (s) => this.nodePlanSteps(s as OrchestratorState, emit))
         .addNode('execute_steps', (s) => this.nodeExecuteSteps(s as OrchestratorState, emit))
-        .addNode('validate_dsl', (s) => this.nodeValidateDsl(s as OrchestratorState))
+        .addNode('validate_dsl', (s) => this.nodeValidateDsl(s as OrchestratorState, emit))
         .addNode('commit_version', (s) => this.nodeCommitVersion(s as OrchestratorState, emit))
         .addEdge(START, 'load_context')
         .addEdge('load_context', 'classify_intent')
@@ -261,7 +285,7 @@ export class AiOrchestratorService {
 
     s = await this.nodePlanSteps(s, emit);
     s = await this.nodeExecuteSteps(s, emit);
-    s = await this.nodeValidateDsl(s);
+    s = await this.nodeValidateDsl(s, emit);
     s = await this.nodeCommitVersion(s, emit);
     return s;
   }
@@ -289,6 +313,26 @@ export class AiOrchestratorService {
         content: extractMessageText(m.content)
       }));
 
+    // Resolve [node:id name=X] references in the user message and inject context
+    const currentDsl = (project as ProjectLike).dsl;
+    const nodeRefPattern = /\[node:([^\s\]]+)(?:\s+name=([^\]]+))?\]/g;
+    const referencedNodes: Array<{ id: string; name: string; node: unknown }> = [];
+    let refMatch: RegExpExecArray | null;
+    while ((refMatch = nodeRefPattern.exec(state.userMessage)) !== null) {
+      const nodeId = refMatch[1];
+      const nodeName = refMatch[2] ?? nodeId;
+      const node = (currentDsl as any)?.nodes?.find((n: any) => n.id === nodeId);
+      if (node) referencedNodes.push({ id: nodeId, name: nodeName, node });
+    }
+
+    let enrichedUserMessage = state.userMessage;
+    if (referencedNodes.length > 0) {
+      const nodeContext = referencedNodes
+        .map((r) => `节点 @${r.name} (id=${r.id}): ${JSON.stringify(r.node)}`)
+        .join('\n');
+      enrichedUserMessage = `${state.userMessage}\n\n[Referenced nodes]\n${nodeContext}`;
+    }
+
     await this.aiSessionService.addCheckpoint(state.sessionId, 'load_context', {
       mode: state.mode,
       currentVersion: (project as ProjectLike).currentVersion?.versionNumber ?? null,
@@ -297,8 +341,10 @@ export class AiOrchestratorService {
 
     return {
       ...state,
+      baselineVersionId: ((project as ProjectLike).currentVersion as any)?.id ?? null,
       mode: normalizeMode(state.mode),
-      currentDsl: (project as ProjectLike).dsl,
+      userMessage: enrichedUserMessage,
+      currentDsl,
       conversationHistory,
       updatedProject: null
     };
@@ -466,6 +512,7 @@ export class AiOrchestratorService {
       ];
 
       try {
+        const beforeDsl = workingDsl;
         const rawDsl = await this.aiProviderService.streamChat({
           messages,
           onToken: (delta) => emit('agent.token', { delta })
@@ -474,6 +521,11 @@ export class AiOrchestratorService {
 
         const parsed = JSON.parse(extractJson(rawDsl));
         workingDsl = normalizeDsl(parsed) as NormalizedDsl;
+
+        const focusNodeId = pickFocusNodeId(beforeDsl, workingDsl);
+        if (focusNodeId) {
+          emit('viewport.change', { nodeId: focusNodeId, reason: 'step_update', stepIndex: i });
+        }
 
         // For multi-step: save partial and signal frontend after each intermediate step
         if (i < steps.length - 1) {
@@ -503,14 +555,78 @@ export class AiOrchestratorService {
     return { ...state, draftDsl: workingDsl };
   }
 
-  private async nodeValidateDsl(state: OrchestratorState): Promise<OrchestratorState> {
+  private async nodeValidateDsl(
+    state: OrchestratorState,
+    emit: AgentEmit
+  ): Promise<OrchestratorState> {
     if (state.haltedForQuestion) {
       return state;
     }
 
-    const normalized = normalizeDsl(state.draftDsl ?? state.currentDsl);
+    const validation = this.agentToolsService.validateStructure(state.draftDsl ?? state.currentDsl);
+    const normalized = (validation.dsl ?? normalizeDsl(state.draftDsl ?? state.currentDsl)) as NormalizedDsl;
+    const geometry = this.agentToolsService.analyzeGeometry(normalized);
+    const overlapNodeIds = Array.from(
+      new Set(geometry.overlaps.flatMap((pair) => [pair.a, pair.b]).filter(Boolean))
+    );
+
+    if (validation.errors.length > 0) {
+      const invalidNodeIds = Array.from(
+        new Set(validation.errors.map((item) => item.nodeId).filter((id): id is string => Boolean(id)))
+      );
+      if (invalidNodeIds.length > 0) {
+        emit('scene.highlight', {
+          nodeIds: invalidNodeIds,
+          color: '#ff4d4f',
+          reason: 'validation_error'
+        });
+      }
+
+      if (state.baselineVersionId) {
+        try {
+          const rollbackProject = (await this.agentToolsService.rollback(
+            state.projectId,
+            state.baselineVersionId
+          )) as ProjectLike;
+          emit('dsl.rollback', {
+            projectId: state.projectId,
+            versionId: state.baselineVersionId,
+            versionNumber: (rollbackProject.currentVersion as any)?.versionNumber ?? null,
+            reason: 'critical_validation_failed'
+          });
+          await this.aiSessionService.addCheckpoint(state.sessionId, 'validate_dsl', {
+            nodeCount: normalized.nodes.length,
+            errors: validation.errors,
+            overlapCount: geometry.overlaps.length,
+            rolledBackTo: state.baselineVersionId
+          });
+          return {
+            ...state,
+            draftDsl: normalizeDsl((rollbackProject as any).dsl) as NormalizedDsl,
+            updatedProject: rollbackProject
+          };
+        } catch {
+          emit('agent.thinking', {
+            step: 'validate_dsl',
+            message: '回滚失败，继续使用当前草稿。'
+          });
+        }
+      }
+    }
+
+    if (overlapNodeIds.length > 0) {
+      emit('scene.highlight', {
+        nodeIds: overlapNodeIds,
+        color: '#faad14',
+        reason: 'geometry_overlap'
+      });
+    }
+
     await this.aiSessionService.addCheckpoint(state.sessionId, 'validate_dsl', {
-      nodeCount: normalized.nodes.length
+      nodeCount: normalized.nodes.length,
+      errors: validation.errors,
+      overlapCount: geometry.overlaps.length,
+      kindCounts: geometry.kindCounts
     });
 
     return { ...state, draftDsl: normalized as NormalizedDsl };
@@ -524,9 +640,11 @@ export class AiOrchestratorService {
       return state;
     }
 
-    const updatedProject = await this.projectService.saveDsl(state.projectId, state.draftDsl, {
-      source: state.mode === 'autopilot' ? 'ai-autopilot' : 'ai-navigator'
-    });
+    const updatedProject =
+      state.updatedProject ??
+      (await this.projectService.saveDsl(state.projectId, state.draftDsl, {
+        source: state.mode === 'autopilot' ? 'ai-autopilot' : 'ai-navigator'
+      }));
 
     const versionNumber =
       (updatedProject as ProjectLike).currentVersion?.versionNumber ?? null;
@@ -582,6 +700,22 @@ function summarizeDsl(dsl: NormalizedDsl | undefined): string {
   const nodeCount = dsl.nodes?.length ?? 0;
   const kinds = [...new Set((dsl.nodes ?? []).map((n) => n.kind))].join(', ');
   return `${nodeCount} nodes (${kinds || 'none'})`;
+}
+
+function pickFocusNodeId(
+  beforeDsl: NormalizedDsl | undefined,
+  afterDsl: NormalizedDsl | undefined
+): string | null {
+  const beforeIds = new Set((beforeDsl?.nodes ?? []).map((n) => n.id));
+  const afterNodes = afterDsl?.nodes ?? [];
+
+  const newlyAdded = afterNodes.find((node) => !beforeIds.has(node.id));
+  if (newlyAdded?.id) {
+    return newlyAdded.id;
+  }
+
+  const lastNode = afterNodes[afterNodes.length - 1];
+  return lastNode?.id ?? null;
 }
 
 function extractMessageText(content: unknown): string {

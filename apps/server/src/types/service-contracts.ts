@@ -75,6 +75,14 @@ export interface AiOrchestratorServiceContract {
   }): Promise<unknown>;
 }
 
+export interface AgentToolsServiceContract {
+  validateStructure(dslInput: unknown): unknown;
+  analyzeGeometry(dslInput: unknown): unknown;
+  querySummary(dslInput: unknown): unknown;
+  getNodeInfo(dslInput: unknown, nodeId: string): unknown;
+  rollback(projectId: string, versionId: string): Promise<unknown>;
+}
+
 export interface ExportServiceContract {
   exportProjectAsZip(projectId: string): Promise<unknown>;
 }
@@ -96,6 +104,7 @@ export interface AppServices {
   aiProviderService: AiProviderServiceContract;
   aiSessionService: AiSessionServiceContract;
   aiStreamService: AiStreamServiceContract;
+  agentToolsService: AgentToolsServiceContract;
   aiOrchestratorService: AiOrchestratorServiceContract;
   exportService: ExportServiceContract;
   postgresService: PostgresServiceContract;

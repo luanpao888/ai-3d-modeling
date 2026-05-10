@@ -41,6 +41,7 @@ const en = {
     newProject: 'New project',
     projects: 'Projects',
     assetRegistry: 'Asset registry',
+    sceneTree: 'Scene',
     versions: 'Version timeline',
     sessions: 'AI session'
   },

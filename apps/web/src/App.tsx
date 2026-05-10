@@ -8,6 +8,7 @@ import { ProjectsPage } from './components/ProjectsPage';
 import { StudioChatPanel } from './components/studio/StudioChatPanel';
 import { StudioDslModal } from './components/studio/StudioDslModal';
 import { StudioPreviewPanel } from './components/studio/StudioPreviewPanel';
+import { StudioSidebar } from './components/studio/StudioSidebar';
 import { StudioThemeProvider } from './components/studio/StudioThemeProvider';
 import { StudioToolbar } from './components/studio/StudioToolbar';
 import { useStudioWorkspace } from './hooks/useStudioWorkspace';
@@ -50,6 +51,14 @@ function StudioView({
         </Card>
       ) : null}
       <div className="studio-workspace">
+        <StudioSidebar
+          t={workspace.t}
+          assets={workspace.assets}
+          dslNodes={workspace.dslNodes}
+          onNavigateToProjects={onNavigateToProjects}
+          onFocusNode={workspace.handleFocusNode}
+          onHighlightNode={(id) => workspace.handleHighlightNodes([id])}
+        />
         <StudioPreviewPanel
           t={workspace.t}
           activeProject={workspace.activeProject}
@@ -79,6 +88,7 @@ function StudioView({
           onSend={workspace.handleGenerateDsl}
           onResolveQuestion={workspace.handleResolveQuestion}
           onLoadOlderHistory={workspace.handleLoadOlderHistory}
+          dslNodes={workspace.dslNodes}
         />
       </div>
     </div>

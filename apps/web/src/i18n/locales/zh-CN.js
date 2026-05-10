@@ -41,6 +41,7 @@ const zhCN = {
     newProject: '新建项目',
     projects: '项目列表',
     assetRegistry: '资源库',
+    sceneTree: '场景树',
     versions: '版本时间线',
     sessions: 'AI 会话'
   },
@@ -117,7 +118,7 @@ const zhCN = {
     projectName: '起始项目',
     projectDescription: '默认 AI 3D 建模工作区',
     createdFromWeb: '通过 Web 工作台创建',
-    aiPrompt: '在房间中央附近添加一把椅子和一张桌子。'
+    aiPrompt: ''
   },
   modes: {
     navigator: '导航模式',

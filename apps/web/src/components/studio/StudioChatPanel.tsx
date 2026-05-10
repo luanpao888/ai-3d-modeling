@@ -1,4 +1,4 @@
-import { AppstoreOutlined, LoadingOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, BuildOutlined, FolderOutlined, LayoutOutlined, LoadingOutlined, RadarChartOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
 import { Bubble, Sender } from '@ant-design/x';
 import { Button, Card, Empty, Flex, Space, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
@@ -10,6 +10,13 @@ import 'dayjs/locale/zh-cn';
 dayjs.extend(relativeTime);
 
 const { Text, Title } = Typography;
+
+interface DslNodeRef {
+  id?: string;
+  name?: string;
+  kind?: string;
+  primitive?: string;
+}
 
 interface MessageItem {
   id: string;
@@ -24,6 +31,7 @@ interface QuestionItem {
   createdAt?: string;
   options?: string[];
   status?: string;
+  decision?: string;
 }
 
 interface DecisionItem {
@@ -56,6 +64,7 @@ interface Props {
   onSend: (value?: string) => void;
   onResolveQuestion: (questionId: string, option: string) => void;
   onLoadOlderHistory: () => void;
+  dslNodes?: DslNodeRef[];
 }
 
 export function StudioChatPanel({
@@ -74,24 +83,65 @@ export function StudioChatPanel({
   isLoadingOlderHistory,
   onSend,
   onResolveQuestion,
-  onLoadOlderHistory
+  onLoadOlderHistory,
+  dslNodes = []
 }: Props) {
   const [isAtTop, setIsAtTop] = useState(false);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+
+  const mentionNodes = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return dslNodes
+      .filter((n) => !q || (n.name ?? n.id ?? '').toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [mentionQuery, dslNodes]);
+
+  function handlePromptChange(value: string) {
+    setPrompt(value);
+    const match = value.match(/@([\u4e00-\u9fa5\w]*)$/);
+    setMentionQuery(match ? match[1] : null);
+  }
+
+  function handleMentionSelect(node: DslNodeRef) {
+    const name = node.name ?? node.id ?? '';
+    const next = prompt.replace(/@[\u4e00-\u9fa5\w]*$/, `@${name} `);
+    setPrompt(next);
+    setMentionQuery(null);
+  }
+
+  function handleSubmit(value?: string) {
+    const raw = String(value ?? prompt).trim();
+    // Expand @name → [node:id name=name] for AI context
+    const expanded = raw.replace(/@([\u4e00-\u9fa5\w]+)/g, (m, name) => {
+      const found = dslNodes.find((n) => (n.name ?? n.id) === name);
+      return found?.id ? `[node:${found.id} name=${name}]` : m;
+    });
+    onSend(expanded);
+  }
   const prevItemCountRef = useRef(0);
 
   const mergedTimelineItems = useMemo(() => {
     const records: Array<{ key: string; role: 'user' | 'ai' | 'system'; order: number; content: React.ReactNode }> = [];
+    let latestOrder = 0;
 
     for (const message of history.messages ?? []) {
+      const messageText = getMessageContent(message.content).trim();
+      if (!messageText) {
+        continue;
+      }
+
       const timestamp = formatCompactTime(message.createdAt, locale);
+      const order = Date.parse(message.createdAt || '') || 0;
+      latestOrder = Math.max(latestOrder, order);
       records.push({
         key: `message-${message.id}`,
         role: message.role === 'assistant' ? 'ai' : 'user',
-        order: Date.parse(message.createdAt || '') || 0,
+        order,
         content: (
           <div className="studio-message-block">
-            <div>{getMessageContent(message.content)}</div>
+            <div>{messageText}</div>
             {timestamp ? <Text type="secondary" className="studio-message-time">{timestamp}</Text> : null}
           </div>
         )
@@ -99,11 +149,17 @@ export function StudioChatPanel({
     }
 
     for (const question of history.questions ?? []) {
+      if (question.status === 'resolved' && question.decision === 'superseded') {
+        continue;
+      }
+
       const timestamp = formatCompactTime(question.createdAt, locale);
+      const order = Date.parse(question.createdAt || '') || 0;
+      latestOrder = Math.max(latestOrder, order);
       records.push({
         key: `question-${question.id}`,
         role: 'ai',
-        order: Date.parse(question.createdAt || '') || 0,
+        order,
         content: (
           <div className="studio-question-block">
             <Text strong>{question.prompt}</Text>
@@ -129,18 +185,16 @@ export function StudioChatPanel({
       });
     }
 
-    for (const decision of history.decisions ?? []) {
-      const timestamp = formatCompactTime(decision.createdAt, locale);
+    if (isStreaming) {
       records.push({
-        key: `decision-${decision.id}`,
-        role: 'system',
-        order: Date.parse(decision.createdAt || '') || 0,
+        key: 'message-streaming',
+        role: 'ai',
+        order: latestOrder + 1,
         content: (
-          <div className="studio-system-block">
-            <Text strong>{t('labels.decision')}</Text>
-            <Text>{decision.selectedOption}</Text>
-            {decision.rationale ? <Text type="secondary">{decision.rationale}</Text> : null}
-            {timestamp ? <Text type="secondary" className="studio-message-time">{timestamp}</Text> : null}
+          <div className="studio-message-block studio-message-block--streaming">
+            <div>
+              {streamingText || <span className="studio-streaming-cursor" />}
+            </div>
           </div>
         )
       });
@@ -148,7 +202,7 @@ export function StudioChatPanel({
 
     records.sort((left, right) => left.order - right.order);
     return records;
-  }, [history.decisions, history.messages, history.questions, isRunning, locale, onResolveQuestion, t]);
+  }, [history.decisions, history.messages, history.questions, isRunning, isStreaming, locale, onResolveQuestion, streamingText, t]);
 
   const roleConfig = useMemo(
     () => ({
@@ -244,14 +298,6 @@ export function StudioChatPanel({
           {canLoadMore ? <Text type="secondary" className="studio-chat-load-more">{isLoadingOlderHistory ? t('labels.loadingMore') : t('labels.pullToLoadPrevious')}</Text> : null}
           {!canLoadMore && isAtTop ? <Text type="secondary" className="studio-chat-load-more">{t('labels.noMoreMessagesTop')}</Text> : null}
           <Bubble.List className="studio-bubble-list" items={mergedTimelineItems as any} role={roleConfig as any} />
-          {isStreaming && (
-            <div className="studio-streaming-bubble">
-              <div className="studio-bubble-avatar studio-bubble-avatar--ai"><RobotOutlined /></div>
-              <div className="studio-streaming-content">
-                {streamingText || <span className="studio-streaming-cursor" />}
-              </div>
-            </div>
-          )}
         </div>
       ) : (
         <div className="studio-empty-chat">
@@ -260,12 +306,31 @@ export function StudioChatPanel({
       )}
 
       <div className="studio-sender-wrap">
+        {mentionQuery !== null && mentionNodes.length > 0 && (
+          <div className="studio-mention-panel">
+            {mentionNodes.map((node) => (
+              <button
+                key={node.id}
+                className="studio-mention-item"
+                onMouseDown={(e) => { e.preventDefault(); handleMentionSelect(node); }}
+              >
+                {node.kind === 'group' ? <FolderOutlined /> :
+                 node.kind === 'constructed' ? <BuildOutlined /> :
+                 (node.primitive === 'sphere' || node.primitive === 'cylinder') ? <RadarChartOutlined /> :
+                 node.kind === 'asset' ? <AppstoreOutlined /> : <LayoutOutlined />}
+                <span className="studio-mention-name">{node.name ?? node.id}</span>
+                {node.id && <span className="studio-mention-id">#{node.id}</span>}
+              </button>
+            ))}
+          </div>
+        )}
         <Sender
           key={senderResetKey}
+          value={prompt}
           loading={isRunning}
           submitType="enter"
-          onChange={setPrompt}
-          onSubmit={(value) => onSend(String(value ?? ''))}
+          onChange={handlePromptChange}
+          onSubmit={handleSubmit}
           placeholder={t('labels.aiPrompt')}
           autoSize={{ minRows: 3, maxRows: 6 }}
           footer={<Text type="secondary">{t('labels.ctrlEnter')}</Text>}

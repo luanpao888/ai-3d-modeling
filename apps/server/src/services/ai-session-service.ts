@@ -279,6 +279,23 @@ export class AiSessionService {
     });
   }
 
+  async resolvePendingQuestions(
+    sessionId: string,
+    { decision = 'superseded' }: { decision?: string } = {}
+  ): Promise<QuestionRecord[]> {
+    const { rows } = await this.databaseService.query<QuestionRow>(
+      `
+        UPDATE project_ai_questions
+        SET status = 'resolved', decision = $2, resolved_at = NOW()
+        WHERE session_id = $1 AND status = 'pending'
+        RETURNING id, session_id, prompt, options, status, decision, created_at, resolved_at
+      `,
+      [sessionId, decision]
+    );
+
+    return rows.map(toQuestion);
+  }
+
   async markSessionStatus(sessionId: string, status: string, lastError: string | null = null) {
     await this.databaseService.query(
       `

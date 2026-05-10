@@ -9,6 +9,7 @@ export const UP_AXES = ['Y', 'Z'];
 export const ROTATION_UNITS = ['radian', 'degree'];
 
 const vector3Schema = z.tuple([z.number(), z.number(), z.number()]);
+const vector2Schema = z.tuple([z.number(), z.number()]);
 
 const materialSchema = z
   .object({
@@ -47,7 +48,31 @@ const assetNodeSchema = baseNodeSchema.extend({
   assetId: z.string().min(1)
 });
 
-export const sceneNodeSchema = z.union([primitiveNodeSchema, assetNodeSchema]);
+// Feature operation schema — op discriminates the type, extra fields are open
+const dslFeatureSchema = z.object({
+  op: z.enum(['profile', 'extrude', 'revolve', 'sweep', 'loft', 'boolean', 'fillet', 'array'])
+}).catchall(z.unknown());
+
+// Constructed node: a parametric feature sequence (revolve a profile, extrude a sketch, etc.)
+const constructedNodeSchema = baseNodeSchema.extend({
+  kind: z.literal('constructed'),
+  geometry: z.object({
+    features: z.array(dslFeatureSchema).min(1)
+  })
+});
+
+// Group node: a named container that owns child node IDs (scene tree parent)
+const groupNodeSchema = baseNodeSchema.extend({
+  kind: z.literal('group'),
+  children: z.array(z.string().min(1)).default([])
+});
+
+export const sceneNodeSchema = z.discriminatedUnion('kind', [
+  primitiveNodeSchema,
+  assetNodeSchema,
+  groupNodeSchema,
+  constructedNodeSchema
+]);
 
 export const dslSchema = z.object({
   version: z.string().default(DSL_VERSION),
@@ -164,6 +189,7 @@ export function createDefaultDsl(sceneName = 'Starter Scene') {
     nodes: [
       {
         id: 'ground-plane',
+        name: '地板',
         kind: 'primitive',
         primitive: 'plane',
         dimensions: {
@@ -178,6 +204,7 @@ export function createDefaultDsl(sceneName = 'Starter Scene') {
       },
       {
         id: 'starter-block',
+        name: '主体',
         kind: 'primitive',
         primitive: 'box',
         position: [0, 0.5, 0],

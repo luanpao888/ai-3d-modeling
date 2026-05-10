@@ -46,27 +46,83 @@ export interface SessionHistoryRecord {
   totalMessages?: number;
 }
 
-export interface DslNode {
+// ─── DSL Node base fields ────────────────────────────────────────────────────
+
+interface DslNodeBase {
   id: string;
-  kind: 'primitive' | 'asset';
+  /** Human-readable name assigned by AI. Used for @mention references in chat. */
   name?: string;
   position?: [number, number, number];
   rotation?: [number, number, number];
   scale?: [number, number, number];
-  primitive?: 'box' | 'sphere' | 'cylinder' | 'plane';
-  dimensions?: {
-    width?: number;
-    height?: number;
-    depth?: number;
-    radius?: number;
-  };
-  assetId?: string;
   material?: {
     color?: string;
     metalness?: number;
     roughness?: number;
   };
 }
+
+export interface DslPrimitiveNode extends DslNodeBase {
+  kind: 'primitive';
+  primitive: 'box' | 'sphere' | 'cylinder' | 'plane';
+  dimensions?: {
+    width?: number;
+    height?: number;
+    depth?: number;
+    radius?: number;
+  };
+}
+
+export interface DslAssetNode extends DslNodeBase {
+  kind: 'asset';
+  assetId: string;
+}
+
+/** Feature operations that compose a constructed node's geometry */
+export interface DslFeature {
+  op: 'profile' | 'extrude' | 'revolve' | 'sweep' | 'loft' | 'boolean' | 'fillet' | 'array';
+  // profile
+  shape?: 'circle' | 'rectangle' | 'ellipse' | 'polyline';
+  radius?: number;
+  width?: number;
+  height?: number;
+  /** 2D polyline points [x, y] for profile shape */
+  points?: [number, number][];
+  // extrude
+  depth?: number;
+  taper?: number;
+  // revolve
+  axis?: 'x' | 'y' | 'z';
+  angle?: number;
+  // sweep / loft
+  pathNodeId?: string;
+  profileNodeIds?: string[];
+  // boolean
+  operation?: 'union' | 'subtract' | 'intersect';
+  targetNodeId?: string;
+  // fillet
+  edges?: 'all' | 'top' | 'bottom' | 'vertical';
+  // array
+  type?: 'linear' | 'circular' | 'grid';
+  count?: number;
+  spacing?: number;
+  [key: string]: unknown;
+}
+
+export interface DslConstructedNode extends DslNodeBase {
+  kind: 'constructed';
+  geometry: {
+    features: DslFeature[];
+  };
+}
+
+export interface DslGroupNode extends DslNodeBase {
+  kind: 'group';
+  /** Ordered list of child node IDs owned by this group */
+  children: string[];
+}
+
+export type DslNode = DslPrimitiveNode | DslAssetNode | DslGroupNode | DslConstructedNode;
 
 export interface DslDocument {
   version: string;

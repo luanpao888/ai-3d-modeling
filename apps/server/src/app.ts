@@ -11,6 +11,7 @@ import { AIProviderService } from './services/ai-provider-service.js';
 import { AiOrchestratorService } from './services/ai-orchestrator-service.js';
 import { AiSessionService } from './services/ai-session-service.js';
 import { AiStreamService } from './services/ai-stream-service.js';
+import { AgentToolsService } from './services/agent-tools-service.js';
 import { AssetRegistryService } from './services/asset-registry-service.js';
 import { ExportService } from './services/export-service.js';
 import { PostgresService } from './services/postgres-service.js';
@@ -37,11 +38,15 @@ export async function buildApp() {
     databaseService: postgresService
   });
   const aiStreamService = new AiStreamService();
+  const agentToolsService = new AgentToolsService({
+    projectService
+  });
   const aiOrchestratorService = new AiOrchestratorService({
     aiProviderService,
     projectService,
     aiSessionService,
-    aiStreamService
+    aiStreamService,
+    agentToolsService
   });
   const exportService = new ExportService({
     projectService
@@ -57,6 +62,7 @@ export async function buildApp() {
     aiProviderService,
     aiSessionService,
     aiStreamService,
+    agentToolsService,
     aiOrchestratorService,
     exportService,
     postgresService
