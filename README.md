@@ -129,6 +129,18 @@ This README stays focused on quick start and runtime commands.
 
 ---
 
+## 🗒️ Future Work
+
+The following goals are still on the roadmap:
+
+- Refine the Agent so it only surfaces a concise process to the frontend, while keeping users involved in the loop.
+- Improve the DSL syntax so the interpreter can express user intent more precisely for the rendering engine.
+- Clarify the Agent workflow, narrow the scope of the scene, and make the system do more work with fewer questions.
+- Add more frontend interaction features, such as camera drag, zoom in/out, and Windows/macOS shortcut support.
+- Connect components with the rendering engine so users can manually edit component parameters and see the scene update.
+
+---
+
 ## License
 
 This project is licensed under the **MIT License**.
