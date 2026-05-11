@@ -46,7 +46,9 @@ export async function buildApp() {
     projectService,
     aiSessionService,
     aiStreamService,
-    agentToolsService
+    agentToolsService,
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    openaiModel: process.env.AI_MODEL
   });
   const exportService = new ExportService({
     projectService

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "sync:prompts": "tsx src/scripts/sync-langsmith-prompts.ts"
   },
   "dependencies": {
     "@ai3d/shared": "*",
@@ -16,6 +17,7 @@
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
     "nanoid": "^5.1.5",
+    "langsmith": "^0.6.3",
     "openai": "^4.104.0",
     "pg": "^8.20.0"
   },

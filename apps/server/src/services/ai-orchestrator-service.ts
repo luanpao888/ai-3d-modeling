@@ -1,5 +1,6 @@
 import { normalizeDsl } from '@ai3d/shared';
 import type { QuestionRecord } from '@ai3d/shared/types';
+import OpenAI from 'openai';
 
 import type { ChatMessage, NormalizedDsl } from './ai-providers/shared.js';
 import {
@@ -94,19 +95,25 @@ export class AiOrchestratorService {
   private aiSessionService: AiSessionServiceLike;
   private aiStreamService: AiStreamServiceLike;
   private agentToolsService: AgentToolsServiceLike;
+  private openaiClient: OpenAI | null = null;
+  private openaiModel = 'gpt-4o-mini';
 
   constructor({
     aiProviderService,
     projectService,
     aiSessionService,
     aiStreamService,
-    agentToolsService
+    agentToolsService,
+    openaiApiKey,
+    openaiModel
   }: {
     aiProviderService: AiProviderServiceLike;
     projectService: ProjectServiceLike;
     aiSessionService: AiSessionServiceLike;
     aiStreamService: AiStreamServiceLike;
     agentToolsService?: AgentToolsServiceLike;
+    openaiApiKey?: string;
+    openaiModel?: string;
   }) {
     this.aiProviderService = aiProviderService;
     this.projectService = projectService;
@@ -114,6 +121,45 @@ export class AiOrchestratorService {
     this.aiStreamService = aiStreamService;
     this.agentToolsService =
       agentToolsService ?? new AgentToolsService({ projectService: this.projectService as any });
+    
+    if (openaiApiKey) {
+      this.openaiClient = new OpenAI({ apiKey: openaiApiKey });
+    }
+    if (openaiModel) {
+      this.openaiModel = openaiModel;
+    }
+  }
+
+  private getOpenAIClient(): OpenAI {
+    if (!this.openaiClient) {
+      throw new Error('OpenAI client not initialized. Provide openaiApiKey in constructor.');
+    }
+    return this.openaiClient;
+  }
+
+  private async callOpenAI({
+    messages,
+    onToken
+  }: {
+    messages: ChatMessage[];
+    onToken: (delta: string) => void;
+  }): Promise<string> {
+    const client = this.getOpenAIClient();
+    const stream = await client.chat.completions.create({
+      model: this.openaiModel,
+      messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      stream: true
+    });
+
+    let full = '';
+    for await (const chunk of stream) {
+      const delta = chunk.choices?.[0]?.delta?.content ?? '';
+      if (delta) {
+        full += delta;
+        onToken(delta);
+      }
+    }
+    return full;
   }
 
   // ── Public entry points ──────────────────────────────────────────────────
@@ -267,7 +313,19 @@ export class AiOrchestratorService {
         .addEdge('commit_version', END)
         .compile();
 
-      return (await graph.invoke({ ...initialState })) as OrchestratorState;
+      return (await graph.invoke(
+        { ...initialState },
+        {
+          runName: 'ai-3d-modeling.langgraph.orchestrator',
+          tags: ['ai-3d-modeling', 'langgraph', 'orchestrator'],
+          metadata: {
+            project_id: initialState.projectId,
+            session_id: initialState.sessionId,
+            mode: initialState.mode,
+            prompt_profile: 'engineering_management'
+          }
+        }
+      )) as OrchestratorState;
     } catch {
       return this.runSequential(initialState, emit);
     }
@@ -363,7 +421,7 @@ export class AiOrchestratorService {
     ];
 
     try {
-      const raw = await this.aiProviderService.streamChat({ messages, onToken: () => {} });
+      const raw = await this.callOpenAI({ messages, onToken: () => {} });
       const parsed = JSON.parse(extractJson(raw)) as { intent?: string };
       const intent = normalizeIntent(parsed.intent);
       emit('agent.thinking', { step: 'classify_intent', message: `意图: ${intent}` });
@@ -385,7 +443,7 @@ export class AiOrchestratorService {
       { role: 'user', content: state.userMessage }
     ];
 
-    const fullText = await this.aiProviderService.streamChat({
+    const fullText = await this.callOpenAI({
       messages,
       onToken: (delta) => emit('agent.token', { delta })
     });
@@ -409,7 +467,7 @@ export class AiOrchestratorService {
     ];
 
     try {
-      const raw = await this.aiProviderService.streamChat({ messages, onToken: () => {} });
+      const raw = await this.callOpenAI({ messages, onToken: () => {} });
       const parsed = JSON.parse(extractJson(raw)) as { question?: string; options?: string[] };
       const questionText = parsed.question ?? '请提供更多细节';
       const options = parsed.options ?? ['继续', '取消'];
@@ -469,7 +527,7 @@ export class AiOrchestratorService {
 
     let steps: string[] = [];
     try {
-      const raw = await this.aiProviderService.streamChat({ messages, onToken: () => {} });
+      const raw = await this.callOpenAI({ messages, onToken: () => {} });
       const parsed = JSON.parse(extractJson(raw)) as { steps?: string[] };
       steps =
         Array.isArray(parsed.steps) && parsed.steps.length > 0
@@ -513,7 +571,7 @@ export class AiOrchestratorService {
 
       try {
         const beforeDsl = workingDsl;
-        const rawDsl = await this.aiProviderService.streamChat({
+        const rawDsl = await this.callOpenAI({
           messages,
           onToken: (delta) => emit('agent.token', { delta })
         });
