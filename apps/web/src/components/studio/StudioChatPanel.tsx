@@ -6,6 +6,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import 'dayjs/locale/zh-cn';
+import { MessageCard } from './MessageCard';
 
 dayjs.extend(relativeTime);
 
@@ -140,10 +141,14 @@ export function StudioChatPanel({
         role: message.role === 'assistant' ? 'ai' : 'user',
         order,
         content: (
-          <div className="studio-message-block">
-            <div>{messageText}</div>
-            {timestamp ? <Text type="secondary" className="studio-message-time">{timestamp}</Text> : null}
-          </div>
+            message.role === 'assistant'
+              ? <MessageCard content={messageText} timestamp={timestamp} t={t} />
+              : (
+                <div className="studio-message-block">
+                  <div>{messageText}</div>
+                  {timestamp ? <Text type="secondary" className="studio-message-time">{timestamp}</Text> : null}
+                </div>
+              )
         )
       });
     }
@@ -192,9 +197,7 @@ export function StudioChatPanel({
         order: latestOrder + 1,
         content: (
           <div className="studio-message-block studio-message-block--streaming">
-            <div>
-              {streamingText || <span className="studio-streaming-cursor" />}
-            </div>
+              <MessageCard content={streamingText} isStreaming t={t} />
           </div>
         )
       });

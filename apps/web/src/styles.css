@@ -854,3 +854,160 @@ select {
     min-height: 360px;
   }
 }
+
+  /* ── MessageCard ─────────────────────────────────────────────────────────── */
+
+  .msg-card {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .msg-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.65;
+    font-size: 14px;
+  }
+
+  /* Collapse trigger (shared for think + code) */
+  .msg-collapse-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    padding: 4px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 13px;
+    color: inherit;
+  }
+  .msg-collapse-trigger:hover {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  .msg-caret {
+    font-size: 10px;
+    transition: transform 0.2s;
+    color: rgba(0, 0, 0, 0.35);
+  }
+  .msg-collapse-trigger--open .msg-caret {
+    transform: rotate(90deg);
+  }
+
+  /* Think block */
+  .msg-think-streaming {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.03);
+    border-left: 3px solid rgba(0, 0, 0, 0.12);
+  }
+  .msg-think-icon {
+    margin-top: 2px;
+    color: rgba(0, 0, 0, 0.35);
+    font-size: 13px;
+  }
+  .msg-think-label {
+    font-size: 13px;
+  }
+  .msg-think-preview {
+    margin-top: 4px;
+    font-size: 12px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: rgba(0, 0, 0, 0.45);
+    max-height: 60px;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent);
+    mask-image: linear-gradient(to bottom, black 40%, transparent);
+  }
+  .msg-think-block {
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.07);
+    overflow: hidden;
+  }
+  .msg-think-block .msg-collapse-trigger {
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 0;
+    border-bottom: 1px solid transparent;
+  }
+  .msg-think-block .msg-collapse-trigger--open {
+    border-bottom-color: rgba(0, 0, 0, 0.07);
+    background: rgba(0, 0, 0, 0.02);
+  }
+  .msg-think-content {
+    margin: 0;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.015);
+    line-height: 1.6;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  /* Code block */
+  .msg-code-block {
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.09);
+    overflow: hidden;
+  }
+  .msg-code-block--streaming .msg-code-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+    font-size: 13px;
+  }
+  .msg-code-block .msg-collapse-trigger {
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 0;
+    border-bottom: 1px solid transparent;
+  }
+  .msg-code-block .msg-collapse-trigger--open {
+    border-bottom-color: rgba(0, 0, 0, 0.07);
+    background: rgba(0, 0, 0, 0.02);
+  }
+  .msg-code-icon {
+    color: rgba(0, 0, 0, 0.4);
+    font-size: 13px;
+  }
+  .msg-code-lang {
+    font-size: 11px !important;
+  }
+  .msg-code-summary {
+    margin-left: auto;
+    font-size: 12px;
+  }
+  .msg-code-body {
+    margin: 0;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    white-space: pre;
+    overflow-x: auto;
+    color: #333;
+    background: rgba(0, 0, 0, 0.015);
+    line-height: 1.6;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .msg-code-body--preview {
+    max-height: 60px;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent);
+    mask-image: linear-gradient(to bottom, black 40%, transparent);
+  }
