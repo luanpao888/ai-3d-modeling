@@ -137,6 +137,27 @@ export class AiSessionService {
     return toMessage(rows[0]);
   }
 
+  async hasUserMessageRequestId(sessionId: string, requestId: string): Promise<boolean> {
+    const normalizedRequestId = String(requestId ?? '').trim();
+    if (!normalizedRequestId) {
+      return false;
+    }
+
+    const result = await this.databaseService.query<{ exists: number }>(
+      `
+        SELECT 1 AS exists
+        FROM project_ai_messages
+        WHERE session_id = $1
+          AND role = 'user'
+          AND content->>'requestId' = $2
+        LIMIT 1
+      `,
+      [sessionId, normalizedRequestId]
+    );
+
+    return result.rowCount > 0;
+  }
+
   async listHistory(projectId: string, sessionId: string, options: { limit?: number; offset?: number } = {}): Promise<SessionHistoryRecord> {
     const session = await this.getSession(projectId, sessionId);
     const normalizedLimit = normalizePositiveInt(options.limit);

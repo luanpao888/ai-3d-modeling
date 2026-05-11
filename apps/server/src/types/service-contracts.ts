@@ -41,6 +41,7 @@ export interface AiSessionServiceContract {
     payload: { actor?: string; selectedOption: string; rationale?: string }
   ): Promise<QuestionRecord>;
   appendMessage(sessionId: string, role: string, content: unknown): Promise<unknown>;
+  hasUserMessageRequestId(sessionId: string, requestId: string): Promise<boolean>;
   markSessionStatus(sessionId: string, status: string, lastError?: string | null): Promise<void>;
   addCheckpoint(sessionId: string, nodeName: string, graphState: unknown): Promise<void>;
 }
@@ -63,6 +64,7 @@ export interface AiOrchestratorServiceContract {
     sessionId: string;
     mode?: string;
     userMessage?: string;
+    requestId?: string;
     emit?: (event: string, payload: unknown) => void;
   }): Promise<unknown>;
   continueFromDecision(input: {

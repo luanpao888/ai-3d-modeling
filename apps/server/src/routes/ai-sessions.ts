@@ -18,6 +18,7 @@ interface CreateSessionBody {
 
 interface SendMessageBody {
   message?: string;
+  requestId?: string;
 }
 
 interface DecisionBody {
@@ -70,6 +71,7 @@ export async function registerAiSessionRoutes(app: FastifyInstance) {
   app.post<{ Params: SessionParams; Body: SendMessageBody }>('/:projectId/ai/sessions/:sessionId/messages', async (request, reply) => {
     const { projectId, sessionId } = request.params;
     const message = request.body?.message ?? '';
+    const requestId = String(request.body?.requestId ?? '').trim() || undefined;
     const session = await app.services.aiSessionService.getSession(projectId, sessionId);
 
     reply.hijack();
@@ -98,6 +100,7 @@ export async function registerAiSessionRoutes(app: FastifyInstance) {
         sessionId,
         mode: session.mode,
         userMessage: message,
+        requestId,
         emit: writeEvent
       });
     } catch (err) {

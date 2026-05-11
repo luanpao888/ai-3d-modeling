@@ -50,6 +50,7 @@ interface ProjectServiceLike {
 
 interface AiSessionServiceLike {
   markSessionStatus(sessionId: string, status: string, lastError?: string | null): Promise<void>;
+  hasUserMessageRequestId(sessionId: string, requestId: string): Promise<boolean>;
   appendMessage(sessionId: string, role: string, content: unknown): Promise<unknown>;
   resolvePendingQuestions(sessionId: string, options?: { decision?: string }): Promise<unknown>;
   listHistory(
@@ -169,12 +170,14 @@ export class AiOrchestratorService {
     sessionId,
     mode,
     userMessage,
+    requestId,
     emit
   }: {
     projectId: string;
     sessionId: string;
     mode?: string;
     userMessage?: string;
+    requestId?: string;
     emit?: AgentEmit;
   }) {
     const prompt = String(userMessage ?? '').trim();
@@ -188,9 +191,24 @@ export class AiOrchestratorService {
         this.aiStreamService.emit(sessionId, event, payload);
       });
 
+    const dedupeRequestId = String(requestId ?? '').trim();
+    if (dedupeRequestId) {
+      const isDuplicate = await this.aiSessionService.hasUserMessageRequestId(sessionId, dedupeRequestId);
+      if (isDuplicate) {
+        agentEmit('run.completed', { status: 'duplicate_ignored' });
+        return {
+          status: 'duplicate_ignored',
+          mode: normalizeMode(mode)
+        };
+      }
+    }
+
     await this.aiSessionService.markSessionStatus(sessionId, 'active');
     await this.aiSessionService.resolvePendingQuestions(sessionId, { decision: 'superseded' });
-    await this.aiSessionService.appendMessage(sessionId, 'user', { text: prompt });
+    await this.aiSessionService.appendMessage(sessionId, 'user', {
+      text: prompt,
+      ...(dedupeRequestId ? { requestId: dedupeRequestId } : {})
+    });
 
     try {
       const resultState = await this.runGraph(

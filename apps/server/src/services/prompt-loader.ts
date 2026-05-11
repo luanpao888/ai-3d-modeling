@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 
 export type PromptKey =
   | 'dsl_generation'
@@ -59,7 +60,8 @@ const PROMPT_METADATA: Record<PromptKey, Omit<PromptDefinition, 'defaultValue'>>
 let promptCache: Partial<Record<PromptKey, string>> = {};
 let isLoaded = false;
 
-const PROMPTS_DIR = join(__dirname, '../../prompts');
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const PROMPTS_DIR = join(currentDir, '../../prompts');
 
 export async function loadPrompts(): Promise<void> {
   if (isLoaded) return;

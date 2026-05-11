@@ -210,13 +210,18 @@ export function createHttpClient(baseUrl = DEFAULT_BASE_URL): ApiClient {
       const controller = new AbortController();
       let finalStatus = 'completed';
       let receivedTerminalEvent = false;
+      const requestId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
       try {
         await fetchEventSource(`${baseUrl}/projects/${projectId}/ai/sessions/${sessionId}/messages`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({ message, requestId }),
           signal: controller.signal,
+          openWhenHidden: true,
           async onopen(response) {
             if (response.ok) {
               return;
@@ -259,6 +264,11 @@ export function createHttpClient(baseUrl = DEFAULT_BASE_URL): ApiClient {
           },
           onerror(error) {
             throw error;
+          },
+          onclose() {
+            if (!receivedTerminalEvent) {
+              throw new Error('Message stream closed before terminal event');
+            }
           }
         });
       } catch (error) {

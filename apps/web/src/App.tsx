@@ -140,14 +140,8 @@ export default function App() {
   }
 
   async function handleCreateProject(data: { name: string; description?: string; units: string; upAxis: string }) {
-    await workspace.handleCreateProject(data as Record<string, unknown>);
-    const targetProjectId = workspace.activeProject?.id;
-    if (targetProjectId) {
-      navigate(`/studio/${targetProjectId}`);
-      return;
-    }
-
-    navigate('/studio');
+    const created = await workspace.handleCreateProject(data as Record<string, unknown>);
+    navigate(`/studio/${created.id}`);
   }
 
   return (

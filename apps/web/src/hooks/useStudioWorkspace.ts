@@ -182,7 +182,7 @@ export function useStudioWorkspace() {
     }
   }
 
-  async function handleCreateProject(data: Record<string, unknown>) {
+  async function handleCreateProject(data: Record<string, unknown>): Promise<ProjectRecord> {
     try {
       const created = await api.createProject({
         description: t('defaults.createdFromWeb'),
@@ -190,6 +190,7 @@ export function useStudioWorkspace() {
       });
       await syncProjects(created.id, true);
       setStatus({ key: 'status.createdProject', values: { name: created.name as string } });
+      return created as ProjectRecord;
     } catch (issue) {
       setError(getErrorMessage(issue));
       throw issue;
